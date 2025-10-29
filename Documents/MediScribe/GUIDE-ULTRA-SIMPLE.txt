@@ -1,0 +1,73 @@
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║        🏥 MEDISCRIBE - GUIDE ULTRA SIMPLE 🏥            ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+IMPORTANT : Je ne peux PAS me connecter à Supabase.
+Vous devez faire 2 étapes simples, c'est tout !
+
+─────────────────────────────────────────────────────────────
+
+📋 CE QUE VOUS DEVEZ FAIRE :
+
+1️⃣  ALlez sur ce lien :
+   https://supabase.com/dashboard/project/bsuldpawzcqhicozxcwq
+
+2️⃣  Cliquez sur "SQL Editor" (menu de gauche, 3ème icône)
+
+3️⃣  Dans ce terminal, tapez :
+   open supabase-schema.sql
+   
+4️⃣  Le fichier s'ouvre. Appuyez sur Cmd+A (tout sélectionner)
+   Puis Cmd+C (copier)
+
+5️⃣  Retournez dans Supabase, collez dans l'éditeur SQL (Cmd+V)
+   Puis cliquez sur "RUN" en bas à droite
+
+6️⃣  Attendez le message "Success"
+
+─────────────────────────────────────────────────────────────
+
+7️⃣  Dans Supabase, cliquez sur "Storage" (menu de gauche)
+
+8️⃣  Cliquez sur "New bucket"
+
+9️⃣  Remplissez :
+    - Name : audio-files
+    - Public bucket : cochez ✓
+    - Créez le bucket
+
+─────────────────────────────────────────────────────────────
+
+🔟 QUAND C'EST FAIT, TAPEZ DANS CE TERMINAL :
+
+   ./DEMARRER.sh
+
+C'est tout ! L'application va démarrer automatiquement.
+
+─────────────────────────────────────────────────────────────
+
+❓ QUESTIONS FRÉQUENTES :
+
+Q : Faut-il créer un email spécial ?
+R : NON ! Chaque médecin s'inscrit avec son email normal.
+
+Q : Les médecins comment s'inscrivent ?
+R : Ils vont sur votre site, "S'inscrire" → email normal
+
+Q : Les fichiers audio ?  
+R : Supprimés après 5h automatiquement ✓
+
+Q : Ça marche vraiment ?
+R : OUI ! Tout est prêt, il faut juste exécuter le SQL.
+
+─────────────────────────────────────────────────────────────
+
+📞 SI VOUS BLOQUEZ :
+
+1. Envoyez-moi une capture d'écran de l'erreur
+2. Je vous guiderai pas à pas
+
+═══════════════════════════════════════════════════════════
+
