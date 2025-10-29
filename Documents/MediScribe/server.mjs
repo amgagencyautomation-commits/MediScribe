@@ -110,8 +110,12 @@ app.use(helmet({
 }));
 
 // CORS sécurisé
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? ['https://mediscribe.netlify.app', 'https://mediscribe.vercel.app'] // À remplacer par vos domaines
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [
+      'https://mediscribe.vercel.app',
+      'https://*.vercel.app', // Wildcard pour les previews
+      'https://mediscribe.netlify.app'
+    ]
   : ['http://localhost:8080', 'http://localhost:3000'];
 
 app.use(cors({

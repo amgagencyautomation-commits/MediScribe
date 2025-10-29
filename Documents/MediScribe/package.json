@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "vercel-build": "npm run build && echo 'Vercel build successful'",
     "build:dev": "vite build --mode development",
-    "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -23,7 +23,10 @@
     "monitoring:down": "docker-compose -f docker-compose.monitoring.yml down",
     "monitoring:logs": "docker-compose -f docker-compose.monitoring.yml logs -f",
     "load:test": "k6 run tests/load/basic-load.js",
-    "load:test:api": "k6 run tests/load/basic-load.js --env API_URL=http://localhost:3001"
+    "load:test:api": "k6 run tests/load/basic-load.js --env API_URL=http://localhost:3001",
+    "lint": "eslint .",
+    "test:api": "node tests/api/runner.js",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
