@@ -1,0 +1,138 @@
+groups:
+  - name: mediscribe_alerts
+    interval: 30s
+    rules:
+      # API Health Alerts
+      - alert: APIDown
+        expr: up{job="mediscribe-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "MediScribe API is down"
+          description: "API has been down for more than 1 minute"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High response time"
+          description: "95th percentile response time is {{ $value }}s (threshold: 5s)"
+
+      # Resource Alerts
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024) > 500
+        for: 15m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}MB (threshold: 500MB)"
+
+      - alert: CriticalMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024) > 800
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value }}MB (threshold: 800MB)"
+
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+      # Business Metrics Alerts
+      - alert: TranscriptionFailureRate
+        expr: rate(transcriptions_total{status="error"}[1h]) / rate(transcriptions_total[1h]) > 0.1
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High transcription failure rate"
+          description: "{{ $value | humanizePercentage }} of transcriptions are failing (threshold: 10%)"
+
+      - alert: NoTranscriptionsInLast Hour
+        expr: increase(transcriptions_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "No transcriptions in the last hour"
+          description: "There have been no transcriptions in the last hour. This might indicate a problem or just low usage."
+
+      - alert: HighMistralAPICost
+        expr: rate(mistral_tokens_used_total[1h]) > 1000000
+        for: 30m
+        labels:
+          severity: warning
+          component: cost
+        annotations:
+          summary: "High Mistral AI API usage"
+          description: "Using {{ $value }} tokens per hour. This may result in high costs."
+
+      # System Health Alerts
+      - alert: DiskSpaceRunningLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 15m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Disk space running low"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Disk space critical"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"
+
+      # Rate Limiting Alerts
+      - alert: HighRateLimitHitRate
+        expr: rate(http_requests_total{status="429"}[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: info
+          component: api
+        annotations:
+          summary: "High rate limit hit rate"
+          description: "Rate limits are being hit frequently ({{ $value }} requests/sec)"
+
+      # Availability Alerts
+      - alert: ServiceFlapping
+        expr: changes(up{job="mediscribe-api"}[10m]) > 5
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Service is flapping"
+          description: "Service has restarted {{ $value }} times in the last 10 minutes"
