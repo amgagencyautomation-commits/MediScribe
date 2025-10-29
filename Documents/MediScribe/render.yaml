@@ -1,4 +1,3 @@
-
 services:
   - type: web
     name: mediscribe-api
@@ -22,7 +21,7 @@ services:
       - key: SENTRY_DSN
         sync: false
 
-  - type: static_site
+  - type: static
     name: mediscribe-frontend
     plan: free
     buildCommand: npm ci && npm run build
