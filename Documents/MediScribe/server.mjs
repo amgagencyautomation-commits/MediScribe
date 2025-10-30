@@ -35,6 +35,7 @@ if (process.env.SENTRY_DSN) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // The request handler must be the first middleware on the app
