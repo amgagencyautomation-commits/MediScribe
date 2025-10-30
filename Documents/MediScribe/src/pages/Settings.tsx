@@ -217,7 +217,16 @@ export default function Settings() {
     try {
       console.log('💾 Sauvegarde clé API via serveur...');
       
+      // Toast de progression
+      toast({
+        title: '⏳ Sauvegarde en cours...',
+        description: 'Chiffrement et enregistrement de votre clé API.',
+      });
+      
       // Utiliser l'endpoint serveur pour contourner les problèmes RLS
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 secondes timeout
+      
       const response = await fetch(`${config.api.baseUrl}/api/save-api-key`, {
         method: 'POST',
         headers: {
@@ -228,27 +237,24 @@ export default function Settings() {
           apiKey: apiKeyData.newKey,
           usePersonalKey: apiKeyData.usePersonalKey,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Erreur serveur' }));
         throw new Error(errorData.error || 'Erreur serveur');
       }
 
       const result = await response.json();
       console.log('✅ Clé sauvegardée côté serveur:', result);
       
-      // Attendre un peu puis actualiser le profil et recharger la clé
-      console.log('⏳ Attente puis rechargement...');
-      setTimeout(async () => {
-        await refreshProfile();
-        await loadCurrentApiKey();
-      }, 1000);
-      
-      // Réinitialiser le formulaire
+      // Réinitialiser le formulaire immédiatement
       setApiKeyData(prev => ({ ...prev, newKey: '' }));
       setShowNewApiKey(false);
       
+      // Afficher le succès immédiatement
       toast({
         title: '✅ Clé API sauvegardée',
         description: 'Votre clé Mistral AI a été enregistrée et chiffrée de manière sécurisée.',
@@ -256,11 +262,32 @@ export default function Settings() {
       
       console.log('🔐 Clé API sauvegardée et chiffrée avec succès');
       
+      // Recharger en arrière-plan (non bloquant)
+      setTimeout(async () => {
+        console.log('⏳ Rechargement des données en arrière-plan...');
+        try {
+          await refreshProfile();
+          await loadCurrentApiKey();
+          console.log('✅ Profil et clé rechargés');
+        } catch (error) {
+          console.warn('⚠️ Erreur lors du rechargement (non critique):', error);
+        }
+      }, 2000);
+      
     } catch (error: any) {
       console.error('❌ Erreur sauvegarde clé:', error);
+      
+      let errorMessage = 'Impossible de sauvegarder la clé API';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Timeout : Le serveur prend trop de temps à répondre. Réessayez.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: 'Erreur de sauvegarde',
-        description: `Impossible de sauvegarder la clé API: ${error.message}`,
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
