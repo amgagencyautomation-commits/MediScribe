@@ -63,10 +63,10 @@ export default function RecordPage() {
   };
 
   const handleTranscribe = async (blob: Blob) => {
-    if (!user || !profile) {
+    if (!user) {
       toast({
         title: 'Erreur',
-        description: 'Utilisateur non connecté.',
+        description: 'Vous devez être connecté pour utiliser cette fonctionnalité.',
         variant: 'destructive',
       });
       return;
@@ -140,7 +140,7 @@ Bilan biologique si nécessaire`;
         consultation_date: new Date().toISOString(),
         consultation_type: consultationData.consultation_type,
         doctor_id: user.id,
-        organization_id: profile.organization_id || undefined,
+        organization_id: profile?.organization_id || undefined,
       });
 
       setConsultationId(consultation.id);
@@ -205,10 +205,10 @@ Bilan biologique si nécessaire`;
   };
 
   const handleGenerateReport = async () => {
-    if (!user || !profile || !transcript) {
+    if (!user || !transcript) {
       toast({
         title: 'Erreur',
-        description: 'Transcription manquante.',
+        description: 'Transcription manquante ou utilisateur non connecté.',
         variant: 'destructive',
       });
       return;
@@ -263,7 +263,7 @@ Bilan biologique si nécessaire`;
       // Mode normal - Générer le compte rendu
       const medicalReport = await BackendMistralService.generateMedicalReport(
         transcript,
-        profile.specialty || 'Médecine générale',
+        profile?.specialty || 'Médecine générale',
         consultationData.consultation_type,
         user.id
       );

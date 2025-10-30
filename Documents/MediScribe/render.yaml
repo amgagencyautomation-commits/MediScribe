@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 services:
   - type: web
     name: mediscribe-api
@@ -41,9 +42,93 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://mediscribe-api.onrender.com
+=======
+# Configuration Render pour MediScribe
+# Ce fichier définit l'infrastructure as code pour le déploiement sur Render
+
+services:
+  # Service Backend API (Node.js)
+  - type: web
+    name: mediscribe-api
+    env: node
+    region: frankfurt # ou oregon, singapore selon votre localisation
+    plan: starter # ou free pour tester
+    buildCommand: npm install
+    startCommand: node server.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      # Supabase Configuration
+      - key: VITE_SUPABASE_URL
+        sync: false # À configurer manuellement dans le dashboard Render
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # CRITIQUE : Clé service role pour bypass RLS
+      # Security
+      - key: VITE_ENCRYPTION_KEY
+        generateValue: true # Render génèrera automatiquement une clé sécurisée
+      - key: SESSION_SECRET
+        generateValue: true
+      # Optional: Monitoring
+      - key: SENTRY_DSN
+        sync: false # Optionnel
+      - key: VITE_ENABLE_SENTRY
+        value: false
+      - key: VITE_ENABLE_ANALYTICS
+        value: false
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  # Service Frontend (Static Site ou Web Service)
+  - type: web
+    name: mediscribe-frontend
+    env: static # ou node si vous utilisez un serveur
+    region: frankfurt
+    plan: starter
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # API Configuration
+      - key: VITE_API_URL
+        value: https://mediscribe-api.onrender.com # Remplacer par votre URL API Render
+      # Supabase Configuration
+>>>>>>> fd2a586 (Mise à jour des pages RecordPage et Settings)
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
+<<<<<<< HEAD
       - key: VITE_APP_ENV
         value: production
+=======
+      # Security
+      - key: VITE_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: mediscribe-api
+          envVarKey: VITE_ENCRYPTION_KEY
+      # App Configuration
+      - key: VITE_APP_ENV
+        value: production
+      - key: VITE_APP_NAME
+        value: MediScribe
+      - key: VITE_ENABLE_DEBUG_LOGS
+        value: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+>>>>>>> fd2a586 (Mise à jour des pages RecordPage et Settings)
