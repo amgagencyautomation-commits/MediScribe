@@ -27,6 +27,13 @@ services:
     buildCommand: npm install && npm run build
     publishPath: dist
     autoDeploy: true
+    headers:
+      - path: /assets/*.js
+        name: Content-Type
+        value: text/javascript; charset=utf-8
+      - path: /assets/*.css
+        name: Content-Type
+        value: text/css; charset=utf-8
     routes:
       - type: rewrite
         source: /.*
