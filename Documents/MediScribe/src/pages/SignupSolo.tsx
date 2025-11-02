@@ -168,7 +168,6 @@ export default function SignupSolo() {
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/login`,
           data: {
             full_name: formData.fullName,
             specialty: formData.specialty,
@@ -215,26 +214,6 @@ export default function SignupSolo() {
 
         // Session active: créer le profil (fallback au trigger) puis naviguer
         console.log('Création du profil pour:', authData.user.id);
-        
-        // Sauvegarder la clé API dans api_keys (nouveau système)
-        if (formData.mistralApiKey) {
-          try {
-            const { apiKeyService } = await import('@/lib/apiKeyService');
-            const saveResult = await apiKeyService.saveUserApiKey(
-              authData.user.id,
-              formData.mistralApiKey,
-              'mistral'
-            );
-            if (saveResult.success) {
-              console.log('✅ Clé API sauvegardée dans api_keys');
-            } else {
-              console.warn('⚠️  Erreur sauvegarde api_keys:', saveResult.error);
-            }
-          } catch (apiKeyServiceError) {
-            console.warn('⚠️  apiKeyService non disponible, sauvegarde uniquement dans profiles');
-          }
-        }
-        
         const { error: profileError } = await (supabase
           .from('profiles') as any)
           .insert({
