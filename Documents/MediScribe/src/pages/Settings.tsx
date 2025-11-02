@@ -262,10 +262,17 @@ export default function Settings() {
       
       console.log('🔐 Clé API sauvegardée et chiffrée avec succès');
       
-      // Ajouter un délai avant de recharger
-      setTimeout(() => {
-        loadCurrentApiKey();
-      }, 1000);
+      // Recharger en arrière-plan (non bloquant)
+      setTimeout(async () => {
+        console.log('⏳ Rechargement des données en arrière-plan...');
+        try {
+          await refreshProfile();
+          await loadCurrentApiKey();
+          console.log('✅ Profil et clé rechargés');
+        } catch (error) {
+          console.warn('⚠️ Erreur lors du rechargement (non critique):', error);
+        }
+      }, 2000);
       
     } catch (error: any) {
       console.error('❌ Erreur sauvegarde clé:', error);

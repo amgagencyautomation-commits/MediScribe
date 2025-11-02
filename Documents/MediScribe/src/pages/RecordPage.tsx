@@ -138,6 +138,7 @@ Bilan biologique si nécessaire`;
         patient_name: consultationData.patient_name,
         consultation_type: consultationData.consultation_type,
         doctor_id: user.id,
+        organization_id: profile?.organization_id || undefined,
       });
       
       let consultation;
