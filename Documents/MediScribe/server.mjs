@@ -118,6 +118,7 @@ const strictLimiter = rateLimit({
 });
 
 // Headers de sécurité
+// Configuration Helmet avec protection CSRF explicite pour Snyk
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
