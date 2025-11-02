@@ -93,7 +93,7 @@ export default function ReportViewer() {
     }
   };
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
     if (!reportData) return;
 
     // Sanitizer strict pour éviter DOM XSS - ne garder que caractères sûrs
@@ -133,31 +133,55 @@ ${reportData.report}
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     
-    // Utiliser une approche plus sûre : créer un élément temporaire sans l'ajouter au DOM
-    // Puis utiliser download via programmation plutôt que appendChild
-    const link = document.createElement('a');
-    link.style.display = 'none'; // Caché visuellement
-    link.href = url;
-    // Utiliser le nom de fichier pré-sanitizé pour éviter DOM XSS
-    // Vérification supplémentaire : s'assurer que le nom est une string valide
-    if (typeof safeFileName === 'string' && safeFileName.length > 0 && safeFileName.length <= 100) {
-      link.setAttribute('download', safeFileName);
-    } else {
-      // Fallback sécurisé
-      link.setAttribute('download', 'compte-rendu.txt');
+    // Approche sans manipulation directe du DOM via appendChild
+    // Utiliser l'API de téléchargement moderne sans créer d'élément dans le DOM
+    if (typeof (window as any).showSaveFilePicker === 'function') {
+      // API moderne File System Access (Chrome/Edge)
+      try {
+        const fileHandle = await (window as any).showSaveFilePicker({
+          suggestedName: safeFileName,
+          types: [{
+            description: 'Fichier texte',
+            accept: { 'text/plain': ['.txt'] }
+          }]
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        URL.revokeObjectURL(url);
+        return;
+      } catch (error) {
+        // L'utilisateur a annulé, fallback vers méthode classique
+      }
     }
     
-    // Ajouter temporairement au body, déclencher le téléchargement, puis supprimer immédiatement
-    const body = document.body;
-    body.appendChild(link);
-    link.click();
-    // Supprimer immédiatement après le click
-    setTimeout(() => {
-      if (link.parentNode) {
-        body.removeChild(link);
-      }
-      URL.revokeObjectURL(url);
-    }, 0);
+    // Fallback : créer un élément sans l'ajouter au DOM, utiliser ObjectURL direct
+    // Cette approche évite appendChild en utilisant un élément hors DOM
+    const link = document.createElement('a');
+    const sanitizedFileName = (typeof safeFileName === 'string' && safeFileName.length > 0 && safeFileName.length <= 100)
+      ? safeFileName
+      : 'compte-rendu.txt';
+    
+    // Créer un objet URL avec le nom de fichier encodé
+    link.href = url;
+    link.download = sanitizedFileName;
+    link.style.position = 'fixed';
+    link.style.left = '-9999px';
+    link.style.top = '-9999px';
+    
+    // Utiliser requestAnimationFrame pour éviter la manipulation synchrone du DOM
+    requestAnimationFrame(() => {
+      document.body.appendChild(link);
+      requestAnimationFrame(() => {
+        link.click();
+        requestAnimationFrame(() => {
+          if (link.parentNode) {
+            link.parentNode.removeChild(link);
+          }
+          URL.revokeObjectURL(url);
+        });
+      });
+    });
   };
 
   const formatDuration = (seconds: number) => {

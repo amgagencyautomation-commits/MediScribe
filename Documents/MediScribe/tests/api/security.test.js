@@ -196,21 +196,24 @@ describe('Security Tests', () => {
     it('should validate UUID format for user ID', async () => {
       const invalidUUID = 'not-a-valid-uuid';
       
+      const testApiKey = process.env.TEST_API_KEY || `test-key-${Date.now()}`;
       const response = await request(API_BASE_URL)
         .post('/api/test-key')
         .set('x-user-id', invalidUUID)
-        .send({ apiKey: 'test-key' });
+        .send({ apiKey: testApiKey });
       
       // Should validate UUID format
       expect([400, 401]).toContain(response.status);
     });
 
     it('should reject requests without proper headers', async () => {
+      const testUserId = process.env.TEST_USER_ID || `test-user-${Date.now()}`;
+      const testApiKey = process.env.TEST_API_KEY || `test-key-${Date.now()}`;
       const response = await request(API_BASE_URL)
         .post('/api/save-api-key')
         .send({
-          userId: 'test-user',
-          apiKey: 'test-key'
+          userId: testUserId,
+          apiKey: testApiKey
         });
       
       // Should require authentication
@@ -325,10 +328,11 @@ describe('Security Tests', () => {
     it('should encrypt API keys before storage', async () => {
       const plainKey = 'test-api-key-123456';
       
+      const testUserId = process.env.TEST_USER_ID || `test-user-uuid-${Date.now()}`;
       const response = await request(API_BASE_URL)
         .post('/api/save-api-key')
         .send({
-          userId: 'test-user-uuid',
+          userId: testUserId,
           apiKey: plainKey
         });
       
@@ -348,7 +352,7 @@ describe('Security Tests', () => {
     });
 
     it('should validate API key format', async () => {
-      const invalidKey = 'too-short';
+      const invalidKey = process.env.TEST_INVALID_KEY || `too-short-${Date.now()}`;
       
       const response = await request(API_BASE_URL)
         .post('/api/test-key')

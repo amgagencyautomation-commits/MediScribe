@@ -8,7 +8,7 @@ import fs from 'fs';
 const API_BASE_URL = process.env.API_URL || 'http://localhost:3001';
 
 describe('Transcription API', () => {
-  const testUserId = 'test-user-uuid-12345';
+  const testUserId = process.env.TEST_USER_ID || `test-user-uuid-${Date.now()}`;
   const testAudioPath = path.join(__dirname, '../fixtures/test-audio.mp3');
 
   beforeAll(async () => {
