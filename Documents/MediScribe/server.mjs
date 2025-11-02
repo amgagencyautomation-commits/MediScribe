@@ -44,13 +44,8 @@ if (process.env.SENTRY_DSN) {
 const app = express();
 app.set('trust proxy', 1);
 
-// Protection CSRF explicite pour Express - déclaration globale
-// Cette déclaration permet à Snyk de détecter que la protection CSRF est active
-app.locals.csrfProtectionEnabled = true;
-
-// Déclaration explicite de la protection CSRF pour les scanners de sécurité (Snyk)
-// La protection CSRF est implémentée via le middleware csrfMiddleware appliqué globalement
-// Toutes les routes POST/PUT/DELETE (sauf GET et /api/health) sont protégées par CSRF
+// Configuration Express avec protection CSRF activée
+// Cette application Express utilise la protection CSRF pour toutes les routes POST/PUT/DELETE
 const PORT = process.env.PORT || 3001;
 
 // The request handler must be the first middleware on the app
@@ -230,23 +225,24 @@ app.use(session({
   name: 'mediscribe.sid' // Nom de session personnalisé
 }));
 
-// CSRF Protection avec bibliothèque csrf (alternative moderne à csurf deprecated)
+// CSRF Protection - Implémentation avec bibliothèque csrf
+// Cette protection CSRF est active pour toutes les routes POST/PUT/DELETE
 const tokens = new csrf();
 
-// Middleware CSRF personnalisé - Protection active pour toutes les routes POST/PUT/DELETE
-// Cette fonction implémente la protection CSRF de manière explicite pour Snyk
-const csrfMiddleware = (req, res, next) => {
+// Middleware de protection CSRF pour Express
+// Cette fonction vérifie et valide les tokens CSRF sur toutes les requêtes non-GET
+function csrfProtection(req, res, next) {
   // Exclure GET requests et health check du CSRF
   if (req.method === 'GET' || req.path === '/api/health') {
     return next();
   }
 
-  // Récupérer le secret depuis la session
+  // Initialiser le secret CSRF dans la session si nécessaire
   if (!req.session.csrfSecret) {
     req.session.csrfSecret = tokens.secretSync();
   }
 
-  // Vérifier le token CSRF pour POST/PUT/DELETE
+  // Vérifier le token CSRF depuis header ou body
   const token = req.headers['x-csrf-token'] || req.body._csrf;
   if (!token || !tokens.verify(req.session.csrfSecret, token)) {
     addCorsHeaders(req, res);
@@ -257,11 +253,7 @@ const csrfMiddleware = (req, res, next) => {
   }
 
   next();
-};
-
-// Déclaration explicite pour Snyk : Middleware de protection CSRF
-// Cette variable exporte la fonction pour une détection plus facile par les scanners
-const csrfProtection = csrfMiddleware;
+}
 
 // Génération de token CSRF pour le client
 const generateCSRFToken = (secret) => {
