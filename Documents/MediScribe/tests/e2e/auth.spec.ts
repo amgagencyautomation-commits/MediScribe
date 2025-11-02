@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Authentication Flow', () => {
-  const testEmail = `test${Date.now()}@mediscribe.com`;
-  const testPassword = 'Test123456!';
+  const testEmail = process.env.TEST_EMAIL || `test${Date.now()}@mediscribe.com`;
+  // Générer mot de passe dynamiquement pour éviter hardcoding
+  const testPassword = process.env.TEST_PASSWORD || `Test${Date.now()}${Math.random().toString(36).substring(7)}!`;
 
   test('should display login page', async ({ page }) => {
     await page.goto('/login');

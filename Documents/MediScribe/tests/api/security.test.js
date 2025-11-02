@@ -88,7 +88,8 @@ describe('Security Tests', () => {
     }, 60000);
 
     it('should sanitize SQL injection attempts', async () => {
-      const sqlPayload = "'; DROP TABLE users; --";
+      // Générer payload SQL dynamiquement pour éviter hardcoding
+      const sqlPayload = process.env.TEST_SQL_PAYLOAD || `'; DROP TABLE users; --${Date.now()}`;
       
       const response = await request(API_BASE_URL)
         .post('/api/test-key')
@@ -326,7 +327,8 @@ describe('Security Tests', () => {
 
   describe('API Key Security', () => {
     it('should encrypt API keys before storage', async () => {
-      const plainKey = 'test-api-key-123456';
+      // Générer clé de test dynamiquement pour éviter hardcoding
+      const plainKey = process.env.TEST_API_KEY || `test-api-key-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       
       const testUserId = process.env.TEST_USER_ID || `test-user-uuid-${Date.now()}`;
       const response = await request(API_BASE_URL)

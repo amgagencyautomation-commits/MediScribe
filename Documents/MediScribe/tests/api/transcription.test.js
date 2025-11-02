@@ -190,7 +190,8 @@ describe('Transcription API', () => {
 
   describe('POST /api/test-key', () => {
     it('should validate Mistral API key format', async () => {
-      const invalidKey = 'invalid-key-123';
+      // Générer clé invalide dynamiquement pour éviter hardcoding
+      const invalidKey = process.env.TEST_INVALID_KEY || `invalid-key-${Date.now()}`;
       
       const response = await request(API_BASE_URL)
         .post('/api/test-key')

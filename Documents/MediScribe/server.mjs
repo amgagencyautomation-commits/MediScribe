@@ -834,15 +834,24 @@ Génère maintenant le compte rendu médical structuré selon le format imposé.
     const result = await mistralResponse.json();
     const report = result.choices[0].message.content;
 
-    // Enregistrer métrique business
+    // Validation de type pour éviter Improper Type Validation
+    // Vérifier que transcript et report sont bien des strings
+    const validatedTranscript = typeof transcript === 'string' ? transcript : String(transcript || '');
+    const validatedReport = typeof report === 'string' ? report : String(report || '');
+    
+    // Vérifier que specialty et consultationType sont des strings
+    const validatedSpecialty = typeof specialty === 'string' ? specialty : String(specialty || '');
+    const validatedConsultationType = typeof consultationType === 'string' ? consultationType : String(consultationType || '');
+
+    // Enregistrer métrique business avec valeurs validées
     metricsDashboard.recordBusinessEvent('report_generated', {
       userId,
       metadata: {
-        specialty: specialty,
-        consultationType: consultationType,
-        tokensUsed: result.usage?.total_tokens || 0,
-        transcriptLength: transcript.length,
-        reportLength: report.length
+        specialty: validatedSpecialty,
+        consultationType: validatedConsultationType,
+        tokensUsed: typeof result.usage?.total_tokens === 'number' ? result.usage.total_tokens : 0,
+        transcriptLength: validatedTranscript.length,
+        reportLength: validatedReport.length
       }
     });
     

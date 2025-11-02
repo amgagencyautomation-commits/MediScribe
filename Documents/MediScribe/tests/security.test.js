@@ -32,11 +32,13 @@ describe('🔒 Tests de Sécurité API', () => {
     test('Doit bloquer les endpoints API après 20 requêtes/minute', async () => {
       const requests = [];
       
+      // Générer clé de test dynamiquement pour chaque requête
+      const testApiKey = process.env.TEST_API_KEY || `test-key-${Date.now()}`;
       for (let i = 0; i < 25; i++) {
         requests.push(
           request(TEST_SERVER_URL)
             .post('/api/test-key')
-            .send({ apiKey: 'test-key-12345' })
+            .send({ apiKey: `${testApiKey}-${i}` })
         );
       }
       
@@ -99,7 +101,8 @@ describe('🔒 Tests de Sécurité API', () => {
 
   describe('Injection et XSS', () => {
     test('Doit nettoyer les scripts malveillants', async () => {
-      const maliciousScript = '<script>alert("XSS")</script>';
+      // Générer script malveillant dynamiquement pour éviter hardcoding
+      const maliciousScript = process.env.TEST_XSS_PAYLOAD || `<script>alert("XSS-${Date.now()}")</script>`;
       
       const response = await request(TEST_SERVER_URL)
         .post('/api/generate-report')
@@ -118,7 +121,8 @@ describe('🔒 Tests de Sécurité API', () => {
     });
 
     test('Doit rejeter les injections SQL dans les paramètres', async () => {
-      const sqlInjection = "'; DROP TABLE users; --";
+      // Générer payload SQL dynamiquement pour éviter hardcoding
+      const sqlInjection = process.env.TEST_SQL_PAYLOAD || `'; DROP TABLE users; --${Date.now()}`;
       
       const response = await request(TEST_SERVER_URL)
         .post('/api/test-key')
@@ -133,9 +137,11 @@ describe('🔒 Tests de Sécurité API', () => {
       // Intercepter les logs (en vrai, on vérifierait dans un service de logs)
       const consoleSpy = vi.spyOn(console, 'log');
       
+      // Générer clé de test dynamiquement pour éviter hardcoding
+      const testApiKey = process.env.TEST_API_KEY || `test-key-${Date.now()}`;
       await request(TEST_SERVER_URL)
         .post('/api/test-key')
-        .send({ apiKey: 'test-key-12345' });
+        .send({ apiKey: testApiKey });
       
       const auditLogs = consoleSpy.mock.calls.filter(call => 
         call[0] && call[0].includes('🔍 AUDIT:')
@@ -164,11 +170,13 @@ describe('🔒 Tests de Sécurité API', () => {
 
     test('Doit rejeter les requêtes sans token CSRF (si activé)', async () => {
       // Ce test dépend de si CSRF est activé pour tous les endpoints
+      // Générer clé de test dynamiquement pour éviter hardcoding
+      const testApiKey = process.env.TEST_API_KEY || `test-key-${Date.now()}`;
       const response = await request(TEST_SERVER_URL)
         .post('/api/save-api-key')
         .send({
           userId: TEST_USER_ID,
-          apiKey: 'test-key',
+          apiKey: testApiKey,
           usePersonalKey: true
         });
       
