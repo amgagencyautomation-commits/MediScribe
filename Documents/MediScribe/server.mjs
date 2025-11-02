@@ -910,20 +910,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Route pour récupérer le token CSRF
+// Route pour récupérer le token CSRF (utilise csurf pour compatibilité)
 app.get('/api/csrf-token', (req, res) => {
-  // Générer ou récupérer le secret depuis la session
-  if (!req.session.csrfSecret) {
-    req.session.csrfSecret = tokens.secretSync();
+  // csurf expose req.csrfToken() automatiquement si le middleware est configuré
+  // Pour GET requests, csurf ne nécessite pas de token
+  addCorsHeaders(req, res);
+  
+  // Utiliser la méthode csurf pour générer le token
+  const csrfToken = req.csrfToken ? req.csrfToken() : null;
+  
+  if (!csrfToken) {
+    // Fallback si csurf n'a pas généré de token
+    // Créer une session CSRF si nécessaire
+    if (!req.session.csrfSecret) {
+      req.session.csrfSecret = tokens.secretSync();
+    }
+    const fallbackToken = generateCSRFToken(req.session.csrfSecret);
+    return res.json({ csrfToken: fallbackToken });
   }
   
-  // Générer le token CSRF
-  const csrfToken = generateCSRFToken(req.session.csrfSecret);
-  
-  addCorsHeaders(req, res);
-  res.json({
-    csrfToken: csrfToken
-  });
+  res.json({ csrfToken: csrfToken });
 });
 
 // 📊 ENDPOINTS MONITORING & DASHBOARD
