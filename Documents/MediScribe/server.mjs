@@ -13,7 +13,7 @@ import cookieParser from 'cookie-parser';
 import DOMPurify from 'isomorphic-dompurify';
 import { body, validationResult } from 'express-validator';
 import * as Sentry from '@sentry/node';
-import csrf from 'csurf';
+import csrf from 'csrf';
 import advancedLogger from './src/lib/logger.js';
 import metricsDashboard from './src/lib/dashboard.js';
 import dotenv from 'dotenv';
@@ -221,29 +221,37 @@ app.use(session({
   name: 'mediscribe.sid' // Nom de session personnalisé
 }));
 
-// CSRF Protection avec csurf (bibliothèque standard reconnue par Snyk)
-// Configuration CSRF avec cookie
-const csrfProtection = csrf({ 
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIE === 'true',
-    sameSite: 'strict'
-  }
-});
+// CSRF Protection avec bibliothèque csrf (alternative moderne à csurf deprecated)
+const tokens = new csrf();
 
-// Wrapper pour exclure certaines routes du CSRF
+// Middleware CSRF personnalisé
 const csrfMiddleware = (req, res, next) => {
   // Exclure GET requests et health check du CSRF
   if (req.method === 'GET' || req.path === '/api/health') {
     return next();
   }
-  // Appliquer protection CSRF pour les autres méthodes
-  csrfProtection(req, res, next);
+
+  // Récupérer le secret depuis la session
+  if (!req.session.csrfSecret) {
+    req.session.csrfSecret = tokens.secretSync();
+  }
+
+  // Vérifier le token CSRF pour POST/PUT/DELETE
+  const token = req.headers['x-csrf-token'] || req.body._csrf;
+  if (!token || !tokens.verify(req.session.csrfSecret, token)) {
+    addCorsHeaders(req, res);
+    return res.status(403).json({
+      error: 'Token CSRF invalide ou manquant',
+      code: 'CSRF_TOKEN_MISMATCH'
+    });
+  }
+
+  next();
 };
 
-// Alternative : génération de token pour compatibilité (si nécessaire)
-const generateCSRFToken = () => {
-  return CryptoJS.lib.WordArray.random(128/8).toString();
+// Génération de token CSRF pour le client
+const generateCSRFToken = (secret) => {
+  return tokens.create(secret);
 };
 
 // Input Sanitization Middleware
@@ -900,11 +908,19 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Route pour récupérer le token CSRF (compatible avec csurf)
-app.get('/api/csrf-token', csrfProtection, (req, res) => {
-  // csurf expose req.csrfToken() automatiquement
+// Route pour récupérer le token CSRF
+app.get('/api/csrf-token', (req, res) => {
+  // Générer ou récupérer le secret depuis la session
+  if (!req.session.csrfSecret) {
+    req.session.csrfSecret = tokens.secretSync();
+  }
+  
+  // Générer le token CSRF
+  const csrfToken = generateCSRFToken(req.session.csrfSecret);
+  
+  addCorsHeaders(req, res);
   res.json({
-    csrfToken: req.csrfToken()
+    csrfToken: csrfToken
   });
 });
 

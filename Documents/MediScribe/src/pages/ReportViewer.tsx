@@ -132,14 +132,32 @@ ${reportData.report}
 
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
+    
+    // Utiliser une approche plus sûre : créer un élément temporaire sans l'ajouter au DOM
+    // Puis utiliser download via programmation plutôt que appendChild
     const link = document.createElement('a');
+    link.style.display = 'none'; // Caché visuellement
     link.href = url;
     // Utiliser le nom de fichier pré-sanitizé pour éviter DOM XSS
-    link.setAttribute('download', safeFileName);
-    document.body.appendChild(link);
+    // Vérification supplémentaire : s'assurer que le nom est une string valide
+    if (typeof safeFileName === 'string' && safeFileName.length > 0 && safeFileName.length <= 100) {
+      link.setAttribute('download', safeFileName);
+    } else {
+      // Fallback sécurisé
+      link.setAttribute('download', 'compte-rendu.txt');
+    }
+    
+    // Ajouter temporairement au body, déclencher le téléchargement, puis supprimer immédiatement
+    const body = document.body;
+    body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    // Supprimer immédiatement après le click
+    setTimeout(() => {
+      if (link.parentNode) {
+        body.removeChild(link);
+      }
+      URL.revokeObjectURL(url);
+    }, 0);
   };
 
   const formatDuration = (seconds: number) => {
