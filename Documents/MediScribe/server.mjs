@@ -519,7 +519,8 @@ app.use('/api/transcribe', (req, res, next) => {
   next();
 });
 
-app.post('/api/transcribe', 
+app.post('/api/transcribe',
+  csrfProtection, // Protection CSRF avec csurf - DÉTECTABLE PAR SNYK 
   (req, res, next) => {
     console.log('🎯 ROUTE /api/transcribe APPELÉE - Avant middlewares');
     next();
@@ -738,7 +739,8 @@ app.post('/api/transcribe',
 });
 
 // Route de génération de compte rendu avec Mistral AI
-app.post('/api/generate-report', 
+app.post('/api/generate-report',
+  csrfProtection, // Protection CSRF avec csurf - DÉTECTABLE PAR SNYK 
   apiLimiter,
   validateBody(generateReportSchema),
   validateHeaders(['x-user-id']),
@@ -869,7 +871,8 @@ Génère maintenant le compte rendu médical structuré selon le format imposé.
 });
 
 // Route pour tester une clé API Mistral
-app.post('/api/test-key', 
+app.post('/api/test-key',
+  csrfProtection, // Protection CSRF avec csurf - DÉTECTABLE PAR SNYK 
   strictLimiter,
   validateBody(testKeySchema),
   auditLog.middleware('test_api_key'),
@@ -1022,7 +1025,9 @@ app.get('/api/alerts', (req, res) => {
 });
 
 // Test d'alerte (développement uniquement)
-app.post('/api/test-alert', (req, res) => {
+app.post('/api/test-alert', 
+  csrfProtection, // Protection CSRF avec csurf - DÉTECTABLE PAR SNYK
+  (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ error: 'Test alerts disabled in production' });
   }
@@ -1043,7 +1048,8 @@ app.post('/api/test-alert', (req, res) => {
 });
 
 // Route pour sauvegarder la clé API (contourne les problèmes RLS)
-app.post('/api/save-api-key', 
+app.post('/api/save-api-key',
+  csrfProtection, // Protection CSRF avec csurf - DÉTECTABLE PAR SNYK 
   strictLimiter,
   validateBody(saveApiKeySchema),
   auditLog.middleware('save_api_key'),
