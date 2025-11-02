@@ -14,4 +14,17 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    sourcemap: mode === 'production', // Source maps uniquement en production
+  },
+  // Configuration pour éviter les warnings de source maps en développement
+  esbuild: {
+    sourcemap: false, // Désactiver source maps esbuild en dev
+  },
+  optimizeDeps: {
+    // Ne pas générer de source maps pour les dépendances optimisées
+    esbuildOptions: {
+      sourcemap: false,
+    },
+  },
 }));

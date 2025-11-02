@@ -257,7 +257,7 @@ export default function Dashboard() {
                       <div 
                         key={consultation.id}
                         className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/consultations`)}
+                        onClick={() => navigate(`/dashboard/consultations`)}
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
@@ -282,7 +282,7 @@ export default function Dashboard() {
                   <Button 
                     variant="outline" 
                     className="w-full"
-                    onClick={() => navigate('/consultations')}
+                    onClick={() => navigate('/dashboard/consultations')}
                   >
                     Voir toutes les consultations
                   </Button>

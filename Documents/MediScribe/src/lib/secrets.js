@@ -81,25 +81,58 @@ class SecretsManager {
   }
 
   /**
-   * Chiffre un secret en mémoire
+   * Chiffre un secret en mémoire avec AES-GCM (intégrité incluse)
    */
   encryptInMemory(value) {
-    const key = crypto.scryptSync('mediscribe-memory-key', 'salt', 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher('aes-256-cbc', key);
+    // Utiliser variable d'environnement pour la clé de chiffrement mémoire
+    const memoryKey = process.env.MEMORY_ENCRYPTION_KEY || 
+                      process.env.VITE_ENCRYPTION_KEY?.substring(0, 32) ||
+                      crypto.randomBytes(32).toString('hex');
+    
+    // Générer salt aléatoire (ne pas hardcoder)
+    const salt = crypto.randomBytes(16);
+    
+    // Dériver la clé de manière sécurisée
+    const key = crypto.scryptSync(memoryKey, salt, 32);
+    
+    // Utiliser AES-GCM pour l'intégrité (au lieu de CBC)
+    const iv = crypto.randomBytes(12); // GCM recommande 12 bytes
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     
     let encrypted = cipher.update(value, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     
-    return { encrypted, iv: iv.toString('hex') };
+    // Tag d'authentification pour vérifier l'intégrité
+    const authTag = cipher.getAuthTag();
+    
+    return { 
+      encrypted, 
+      iv: iv.toString('hex'),
+      salt: salt.toString('hex'),
+      authTag: authTag.toString('hex')
+    };
   }
 
   /**
-   * Déchiffre un secret depuis la mémoire
+   * Déchiffre un secret depuis la mémoire avec vérification d'intégrité
    */
   decryptFromMemory(encryptedData) {
-    const key = crypto.scryptSync('mediscribe-memory-key', 'salt', 32);
-    const decipher = crypto.createDecipher('aes-256-cbc', key);
+    // Récupérer la clé depuis variable d'environnement
+    const memoryKey = process.env.MEMORY_ENCRYPTION_KEY || 
+                      process.env.VITE_ENCRYPTION_KEY?.substring(0, 32) ||
+                      crypto.randomBytes(32).toString('hex');
+    
+    // Reconstituer salt et IV
+    const salt = Buffer.from(encryptedData.salt, 'hex');
+    const iv = Buffer.from(encryptedData.iv, 'hex');
+    const authTag = Buffer.from(encryptedData.authTag, 'hex');
+    
+    // Dériver la même clé
+    const key = crypto.scryptSync(memoryKey, salt, 32);
+    
+    // Déchiffrer avec GCM et vérifier l'intégrité
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
     
     let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');

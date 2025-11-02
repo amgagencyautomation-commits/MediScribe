@@ -133,41 +133,86 @@ Bilan biologique si nécessaire`;
       }
 
       // Mode normal avec Supabase
-      // 1. Créer la consultation dans la base de données
-      const consultation = await ConsultationService.createConsultation({
+      console.log('📝 Étape 1: Création de la consultation...');
+      console.log('📋 Données consultation:', {
         patient_name: consultationData.patient_name,
-        patient_age: consultationData.patient_age ? parseInt(consultationData.patient_age) : undefined,
-        consultation_date: new Date().toISOString(),
         consultation_type: consultationData.consultation_type,
         doctor_id: user.id,
-        organization_id: profile?.organization_id || undefined,
       });
+      
+      let consultation;
+      try {
+        consultation = await ConsultationService.createConsultation({
+          patient_name: consultationData.patient_name,
+          patient_age: consultationData.patient_age ? parseInt(consultationData.patient_age) : undefined,
+          consultation_date: new Date().toISOString(),
+          consultation_type: consultationData.consultation_type,
+          doctor_id: user.id,
+          organization_id: profile?.organization_id || undefined,
+        });
+        console.log('✅ Consultation créée avec succès, ID:', consultation.id);
+        setConsultationId(consultation.id);
+      } catch (consultationError) {
+        console.error('❌ ERREUR création consultation:', consultationError);
+        throw new Error(`Erreur lors de la création de la consultation: ${consultationError instanceof Error ? consultationError.message : 'Erreur inconnue'}`);
+      }
 
-      setConsultationId(consultation.id);
+      // 2. Vérifier le blob audio avant de continuer
+      console.log('📄 Vérification blob audio...');
+      if (!blob || blob.size === 0) {
+        console.error('❌ Blob audio vide ou invalide:', { exists: !!blob, size: blob?.size });
+        throw new Error('Le fichier audio est vide ou invalide. Veuillez réessayer l\'enregistrement.');
+      }
+      console.log('✅ Blob audio valide:', { size: blob.size, type: blob.type });
 
-      // 2. Récupérer la clé API et transcrire l'audio via backend (Mistral)
-      console.log('🔑 Récupération clé API pour transcription...');
+      // 3. Récupérer la clé API et transcrire l'audio via backend (Mistral)
+      console.log('🔑 Étape 2: Récupération clé API pour transcription...');
       console.log('🌐 URL API:', import.meta.env.VITE_API_URL);
       
-      const apiKeyResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/get-api-key/${user.id}`);
-      console.log('📡 Réponse clé API status:', apiKeyResponse.status);
-      
-      const apiKeyResult = await apiKeyResponse.json();
-      console.log('📥 Résultat clé API:', apiKeyResult);
-      
-      const apiKey = apiKeyResult.success ? apiKeyResult.apiKey : null;
-      
-      if (!apiKey) {
-        console.error('❌ Pas de clé API trouvée');
-        throw new Error('Clé API Mistral non configurée. Veuillez la configurer dans les paramètres.');
+      let apiKeyResponse;
+      try {
+        apiKeyResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/get-api-key/${user.id}`);
+        console.log('📡 Réponse clé API status:', apiKeyResponse.status);
+        
+        if (!apiKeyResponse.ok) {
+          throw new Error(`Erreur HTTP ${apiKeyResponse.status} lors de la récupération de la clé API`);
+        }
+        
+        const apiKeyResult = await apiKeyResponse.json();
+        console.log('📥 Résultat clé API:', { success: apiKeyResult.success, hasApiKey: !!apiKeyResult.apiKey });
+        
+        const apiKey = apiKeyResult.success ? apiKeyResult.apiKey : null;
+        
+        if (!apiKey) {
+          console.error('❌ Pas de clé API trouvée dans la réponse');
+          throw new Error('Clé API Mistral non configurée. Veuillez la configurer dans les paramètres.');
+        }
+        
+        console.log('✅ Clé API récupérée, longueur:', apiKey.length);
+        console.log('📄 Blob audio - taille:', blob.size, 'type:', blob.type);
+        
+        // 4. Transcription
+        console.log('🎙️ Étape 3: Début de la transcription...');
+        console.log('🚀 AVANT APPEL transcribeAudio');
+        
+        try {
+          const transcription = await BackendMistralService.transcribeAudio(blob, user.id, apiKey);
+          console.log('✅ Transcription reçue, longueur:', transcription.length);
+          console.log('✅ Transcription (100 premiers caractères):', transcription.substring(0, 100) + '...');
+          setTranscript(transcription);
+        } catch (transcribeError) {
+          console.error('❌ ERREUR DANS transcribeAudio:', transcribeError);
+          console.error('📋 Détails erreur:', {
+            message: transcribeError instanceof Error ? transcribeError.message : 'Erreur inconnue',
+            stack: transcribeError instanceof Error ? transcribeError.stack : undefined,
+            name: transcribeError instanceof Error ? transcribeError.name : undefined,
+          });
+          throw transcribeError; // Re-throw pour être capturé par le catch principal
+        }
+      } catch (apiKeyError) {
+        console.error('❌ ERREUR récupération clé API:', apiKeyError);
+        throw apiKeyError instanceof Error ? apiKeyError : new Error('Erreur lors de la récupération de la clé API');
       }
-      
-      console.log('🎙️ Transcription avec clé API, longueur:', apiKey.length);
-      console.log('📄 Blob audio - taille:', blob.size, 'type:', blob.type);
-      
-      const transcription = await BackendMistralService.transcribeAudio(blob, user.id, apiKey);
-      console.log('✅ Transcription reçue:', transcription.substring(0, 100) + '...');
-      setTranscript(transcription);
 
       // 3. Afficher la transcription pour validation
       setCurrentStep('review_transcript');
@@ -178,19 +223,34 @@ Bilan biologique si nécessaire`;
       });
 
     } catch (error) {
-      console.error('Erreur lors du traitement:', error);
+      console.error('❌ ERREUR GLOBALE lors du traitement:', error);
+      console.error('📋 Détails complets:', {
+        message: error instanceof Error ? error.message : 'Erreur inconnue',
+        name: error instanceof Error ? error.name : undefined,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       
       let errorMessage = 'Erreur lors du traitement de la consultation.';
       
       if (error instanceof Error) {
+        console.error('📋 Message d\'erreur:', error.message);
+        
         if (error.message.includes('Clé API')) {
           errorMessage = 'Clé API non configurée. Veuillez la configurer dans les paramètres.';
         } else if (error.message.includes('quota')) {
           errorMessage = 'Quota API dépassé. Vérifiez votre compte Mistral AI.';
-        } else if (error.message.includes('network')) {
-          errorMessage = 'Erreur réseau. Veuillez réessayer.';
+        } else if (error.message.includes('network') || error.message.includes('réseau') || error.message.includes('fetch')) {
+          errorMessage = 'Erreur réseau. Vérifiez votre connexion et que le serveur est démarré.';
+        } else if (error.message.includes('consultation')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('blob') || error.message.includes('audio')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = `Erreur: ${error.message}`;
         }
       }
+
+      console.error('📤 Affichage message d\'erreur à l\'utilisateur:', errorMessage);
 
       toast({
         title: 'Erreur',
@@ -200,6 +260,7 @@ Bilan biologique si nécessaire`;
 
       setCurrentStep('recording');
     } finally {
+      console.log('🏁 Fin du traitement, setIsProcessing(false)');
       setIsProcessing(false);
     }
   };

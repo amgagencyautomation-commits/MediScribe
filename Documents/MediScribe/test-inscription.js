@@ -1,8 +1,18 @@
 // Test d'inscription pour diagnostiquer le problème
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const supabaseUrl = 'https://bfyoebrkmpbpeihiqqvz.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmeW9lYnJrbXBicGVpaGlxcXZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2ODcwMjYsImV4cCI6MjA3NzI2MzAyNn0.Pid5xDtpFwdH8NqGj6UMTwRfDUS1SlpOxZWvdGuFhk0';
+// Charger variables d'environnement
+dotenv.config({ path: '.env.server' });
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Variables Supabase manquantes dans .env.server');
+  console.error('   Définissez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 

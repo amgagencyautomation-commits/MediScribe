@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SmartRoute } from "@/components/SmartRoute";
@@ -31,7 +31,12 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
           <AuthProvider>
             <Routes>
               {/* Route racine intelligente */}
@@ -52,6 +57,9 @@ const App = () => (
               <Route path="/dashboard/report" element={<SmartRoute type="protected"><ReportViewer /></SmartRoute>} />
               <Route path="/dashboard/consultations" element={<SmartRoute type="protected"><Consultations /></SmartRoute>} />
               <Route path="/dashboard/admin" element={<SmartRoute type="protected"><SuperAdmin /></SmartRoute>} />
+              
+              {/* Redirections pour compatibilité */}
+              <Route path="/consultations" element={<Navigate to="/dashboard/consultations" replace />} />
               
               {/* Page d'accueil publique (redirige si connecté) */}
               <Route path="/home" element={<SmartRoute type="public"><Index /></SmartRoute>} />

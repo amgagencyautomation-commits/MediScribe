@@ -144,7 +144,19 @@ export class MistralService {
     userId: string,
     apiKey?: string
   ): Promise<string> {
+    console.log('🎬 DÉBUT transcribeAudio');
+    console.log('📊 Paramètres:', { 
+      blobSize: audioBlob?.size, 
+      blobType: audioBlob?.type,
+      userId,
+      hasApiKey: !!apiKey 
+    });
+    
     try {
+      if (!audioBlob || audioBlob.size === 0) {
+        throw new Error('Blob audio vide ou invalide');
+      }
+      
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.webm');
 
@@ -157,18 +169,58 @@ export class MistralService {
         headers['x-api-key'] = apiKey;
       }
 
-      const response = await fetch(`${config.api.baseUrl}${config.api.endpoints.transcribe}`, {
+      const url = `${config.api.baseUrl}${config.api.endpoints.transcribe}`;
+      console.log('🚀 Envoi requête transcription à:', url);
+      console.log('📊 Audio blob:', { size: audioBlob.size, type: audioBlob.type });
+      console.log('📋 Headers envoyés:', Object.keys(headers));
+      console.log('📋 URL complète:', url);
+      console.log('📋 Config API baseUrl:', config.api.baseUrl);
+      console.log('📋 Endpoint transcribe:', config.api.endpoints.transcribe);
+      
+      // IMPORTANT: Ne pas mettre Content-Type pour FormData, le navigateur le gère automatiquement
+      // Si on met Content-Type manuellement, cela peut casser le multipart/form-data
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers,
         body: formData,
+      }).catch((fetchError) => {
+        console.error('❌ ERREUR FETCH (réseau/CORS):', fetchError);
+        console.error('📋 Détails:', {
+          message: fetchError.message,
+          name: fetchError.name,
+          stack: fetchError.stack,
+        });
+        throw new Error(`Erreur réseau lors de l'envoi: ${fetchError.message}`);
       });
 
+      console.log('📡 Réponse reçue! Status:', response.status, response.statusText);
+
+      console.log('📡 Réponse transcription status:', response.status, response.statusText);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erreur lors de la transcription');
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          const errorText = await response.text();
+          errorData = { error: errorText || 'Erreur lors de la transcription' };
+        }
+        console.error('❌ Erreur transcription:', errorData);
+        throw new Error(errorData.error || `Erreur ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
+      console.log('✅ Résultat transcription:', { 
+        hasTranscript: !!result.transcript,
+        transcriptLength: result.transcript?.length || 0,
+        success: result.success 
+      });
+      
+      if (!result.transcript) {
+        throw new Error('La transcription est vide. Vérifiez votre enregistrement audio.');
+      }
+      
       return result.transcript;
     } catch (error) {
       logger.error('Erreur lors de la transcription:', error);

@@ -15,6 +15,12 @@ import { body, validationResult } from 'express-validator';
 import * as Sentry from '@sentry/node';
 import advancedLogger from './src/lib/logger.js';
 import metricsDashboard from './src/lib/dashboard.js';
+import dotenv from 'dotenv';
+
+// Charger les variables d'environnement
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: '.env.server' });
+}
 
 // Initialisation Sentry
 if (process.env.SENTRY_DSN) {
@@ -43,11 +49,25 @@ if (process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.requestHandler());
 }
 
-// Configuration Supabase
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://bfyoebrkmpbpeihiqqvz.supabase.co';
-// Utiliser la clé Service Role côté serveur pour bypass RLS lors de la lecture des clés BYOK
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmeW9lYnJrbXBicGVpaGlxcXZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2ODcwMjYsImV4cCI6MjA3NzI2MzAyNn0.Pid5xDtpFwdH8NqGj6UMTwRfDUS1SlpOxZWvdGuFhk0';
-const encryptionKey = process.env.VITE_ENCRYPTION_KEY || 'mediscribe-2024-secure-key-32';
+// Configuration Supabase - EXIGER variables d'environnement pour sécurité
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ ERREUR CRITIQUE: Variables Supabase manquantes!');
+  console.error('   VITE_SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY doivent être définies');
+  console.error('   Définissez-les dans .env.server ou variables d\'environnement');
+  process.exit(1);
+}
+
+// Clé de chiffrement - EXIGER variable d'environnement pour sécurité
+const encryptionKey = process.env.VITE_ENCRYPTION_KEY;
+if (!encryptionKey || encryptionKey.length < 32) {
+  console.error('❌ ERREUR CRITIQUE: VITE_ENCRYPTION_KEY manquante ou trop courte (<32 caractères)!');
+  console.error('   Cette clé doit contenir au moins 32 caractères pour AES-256');
+  console.error('   Définissez-la dans .env.server ou variables d\'environnement');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 const supabaseAdmin = supabase; // Même client car on utilise déjà la service role key
@@ -110,21 +130,78 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false // Permet l'upload de fichiers
 }));
 
-// CORS sécurisé
-const allowedOrigins = process.env.NODE_ENV === 'production'
+// CORS sécurisé avec fonction de validation dynamique
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOriginsPatterns = isProduction
   ? [
       'https://mediscribe.vercel.app',
-      'https://*.vercel.app', // Wildcard pour les previews
-      'https://mediscribe.netlify.app'
+      'https://mediscribe.netlify.app',
+      /^https:\/\/.*\.vercel\.app$/, // Wildcard pour les previews Vercel
     ]
-  : ['http://localhost:8080', 'http://localhost:3000'];
+  : [
+      'http://localhost:8080',
+      'http://localhost:3000',
+      'http://127.0.0.1:8080',
+      'http://127.0.0.1:3000',
+    ];
 
-app.use(cors({
-  origin: allowedOrigins,
+// Log pour debug
+console.log(`🌐 CORS config - Mode: ${isProduction ? 'production' : 'development'}, Origines autorisées:`, allowedOriginsPatterns.map(p => typeof p === 'string' ? p : p.toString()));
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Autoriser les requêtes sans origine (Postman, curl, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Vérifier si l'origine correspond à un pattern autorisé
+    const isAllowed = allowedOriginsPatterns.some(pattern => {
+      if (typeof pattern === 'string') {
+        return origin === pattern;
+      }
+      if (pattern instanceof RegExp) {
+        return pattern.test(origin);
+      }
+      return false;
+    });
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️  Origine CORS non autorisée: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-api-key', 'x-csrf-token']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-api-key', 'x-csrf-token'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+
+// Fonction helper pour ajouter les en-têtes CORS en cas d'erreur
+const addCorsHeaders = (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    const isAllowed = allowedOriginsPatterns.some(pattern => {
+      if (typeof pattern === 'string') {
+        return origin === pattern;
+      }
+      if (pattern instanceof RegExp) {
+        return pattern.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+};
 
 // Session Management & CSRF Protection
 app.use(cookieParser());
@@ -196,6 +273,20 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Appliquer sanitization sur tous les inputs
 app.use(sanitizeInputs);
+
+// Middleware de logging global pour toutes les requêtes (debug)
+app.use((req, res, next) => {
+  if (req.path.includes('transcribe')) {
+    console.log('🌐 REQUÊTE RECUE:', req.method, req.path);
+    console.log('📋 Headers:', {
+      'x-user-id': req.headers['x-user-id'],
+      'x-api-key': req.headers['x-api-key'] ? 'présent' : 'absent',
+      'content-type': req.headers['content-type'],
+      origin: req.headers['origin'],
+    });
+  }
+  next();
+});
 
 // Intégrer logger avancé et métriques
 app.use(advancedLogger.requestMiddleware());
@@ -314,66 +405,140 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 } // 25MB max
 });
 
-
 // Fonction pour récupérer la clé API depuis Supabase
 async function getApiKey(userId) {
   try {
     console.log('🔍 getApiKey - userId:', userId);
-    console.log('🔑 Utilise service role key:', supabaseKey.includes('service_role'));
     
-    // Récupérer le profil de l'utilisateur
-    const { data: profiles, error: profileError } = await supabase
+    // Query Supabase with proper syntax (single() returns one row instead of array)
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('personal_mistral_api_key, organization_id, use_personal_api_key')
-      .eq('id', userId);
+      .eq('id', userId)
+      .single();
 
     if (profileError) {
-      console.error('Erreur profil:', profileError);
+      console.error('❌ Erreur profil:', profileError);
       return null;
     }
 
-    if (!profiles || profiles.length === 0) {
-      console.log('Aucun profil trouvé pour:', userId);
+    if (!profile) {
+      console.log('⚠️  Aucun profil trouvé pour:', userId);
       return null;
     }
 
-    const profile = profiles[0];
+    console.log('✅ Profil récupéré:', {
+      hasPersonalKey: !!profile.personal_mistral_api_key,
+      usePersonalKey: profile.use_personal_api_key,
+      hasOrgId: !!profile.organization_id
+    });
 
     // Si l'utilisateur utilise sa clé personnelle
     if (profile.use_personal_api_key && profile.personal_mistral_api_key) {
       console.log('🔐 Déchiffrement clé personnelle...');
-      const decrypted = decryptApiKey(profile.personal_mistral_api_key);
-      console.log('✅ Clé déchiffrée, longueur:', decrypted ? decrypted.length : 'null');
-      return decrypted;
+      try {
+        const decrypted = decryptApiKey(profile.personal_mistral_api_key);
+        if (!decrypted || decrypted.length === 0) {
+          console.error('❌ Échec déchiffrement: clé vide');
+          return null;
+        }
+        console.log('✅ Clé personnelle déchiffrée, longueur:', decrypted.length);
+        return decrypted;
+      } catch (decryptError) {
+        console.error('❌ Erreur déchiffrement:', decryptError);
+        return null;
+      }
     }
 
     // Si l'utilisateur fait partie d'une organisation avec clé partagée
     if (profile.organization_id && !profile.use_personal_api_key) {
-      const { data: org, error: orgError } = await supabase
+      console.log('🔍 Recherche clé organisationnelle pour org:', profile.organization_id);
+      const { data: org, error: orgError } = await supabaseAdmin
         .from('organizations')
         .select('shared_mistral_api_key')
         .eq('id', profile.organization_id)
         .single();
 
-      if (!orgError && org?.shared_mistral_api_key) {
-        return decryptApiKey(org.shared_mistral_api_key);
+      if (orgError) {
+        console.error('❌ Erreur récupération org:', orgError);
+        return null;
+      }
+
+      if (org?.shared_mistral_api_key) {
+        console.log('🔐 Déchiffrement clé organisationnelle...');
+        try {
+          const decrypted = decryptApiKey(org.shared_mistral_api_key);
+          if (!decrypted || decrypted.length === 0) {
+            console.error('❌ Échec déchiffrement org: clé vide');
+            return null;
+          }
+          console.log('✅ Clé organisationnelle déchiffrée');
+          return decrypted;
+        } catch (decryptError) {
+          console.error('❌ Erreur déchiffrement org:', decryptError);
+          return null;
+        }
       }
     }
 
+    console.log('ℹ️  Aucune clé API configurée pour cet utilisateur');
     return null;
   } catch (error) {
-    console.error('Erreur getApiKey:', error);
+    console.error('❌ Erreur getApiKey:', error);
     return null;
   }
 }
 
 // Route de transcription avec Mistral AI
+// Middleware de logging pour toutes les requêtes POST /api/transcribe
+app.use('/api/transcribe', (req, res, next) => {
+  if (req.method === 'POST') {
+    console.log('🎯 REQUÊTE POST /api/transcribe DÉTECTÉE (middleware global)');
+    console.log('📋 Headers:', {
+      'x-user-id': req.headers['x-user-id'],
+      'x-api-key': req.headers['x-api-key'] ? 'présent' : 'absent',
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length'],
+    });
+  }
+  next();
+});
+
 app.post('/api/transcribe', 
+  (req, res, next) => {
+    console.log('🎯 ROUTE /api/transcribe APPELÉE - Avant middlewares');
+    next();
+  },
   apiLimiter,
+  (req, res, next) => {
+    console.log('✅ Rate limiter passé');
+    next();
+  },
   upload.single('file'), 
+  (req, res, next) => {
+    console.log('✅ Upload multer passé, fichier:', req.file ? 'présent' : 'absent');
+    next();
+  },
   validateHeaders(['x-user-id']),
+  (req, res, next) => {
+    console.log('✅ Validation headers passée');
+    next();
+  },
   auditLog.middleware('transcribe_audio'),
   async (req, res) => {
+  console.log('🎯 REQUÊTE TRANSCRIPTION REÇUE!');
+  console.log('📋 Headers reçus:', {
+    'x-user-id': req.headers['x-user-id'],
+    'x-api-key': req.headers['x-api-key'] ? 'présent' : 'absent',
+    'content-type': req.headers['content-type'],
+    'content-length': req.headers['content-length'],
+  });
+  console.log('📦 Fichier reçu:', req.file ? {
+    size: req.file.size,
+    mimetype: req.file.mimetype,
+    originalname: req.file.originalname
+  } : 'AUCUN FICHIER');
+  
   try {
     const userId = req.headers['x-user-id'];
     const apiKeyHeader = req.headers['x-api-key']; // Clé API directe en header
@@ -403,63 +568,157 @@ app.post('/api/transcribe',
     }
 
     console.log('✅ Clé API récupérée pour transcription');
+    console.log('📊 Informations audio:', {
+      size: audioFile.size,
+      mimetype: audioFile.mimetype,
+      originalname: audioFile.originalname
+    });
 
-    // Préparer les données pour Mistral AI
+    // Préparer les données pour Mistral AI avec form-data
     const formData = new FormData();
+    
+    // Ajouter le fichier audio
     formData.append('file', audioFile.buffer, {
-      filename: 'audio.webm',
-      contentType: 'audio/webm'
+      filename: audioFile.originalname || 'audio.webm',
+      contentType: audioFile.mimetype || 'audio/webm'
     });
     formData.append('model', 'voxtral-mini-transcribe-2507');
     formData.append('language', 'fr');
 
-    // Appeler Mistral AI pour la transcription
-    const mistralResponse = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        ...formData.getHeaders()
-      },
-      body: formData,
+    console.log('🚀 Appel API Mistral transcription...');
+    console.log('📊 Données FormData:', {
+      hasFile: !!audioFile.buffer,
+      fileSize: audioFile.buffer?.length || 0,
+      model: 'voxtral-mini-transcribe-2507',
+      language: 'fr'
     });
-
-    if (!mistralResponse.ok) {
-      const errorText = await mistralResponse.text();
-      console.error('Erreur Mistral AI:', errorText);
-      return res.status(mistralResponse.status).json({
-        error: `Erreur Mistral AI: ${errorText}`
+    
+    // Créer un AbortController pour timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 secondes timeout (transcription peut prendre du temps)
+    
+    try {
+      // Obtenir les headers du FormData (nécessaire avec form-data package)
+      const formHeaders = formData.getHeaders();
+      console.log('📋 Headers FormData:', Object.keys(formHeaders));
+      
+      // Appeler Mistral AI pour la transcription
+      const mistralResponse = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          ...formHeaders, // Headers nécessaires pour multipart/form-data
+        },
+        body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+      console.log('📡 Réponse Mistral status:', mistralResponse.status, mistralResponse.statusText);
+      console.log('📋 Headers réponse Mistral:', {
+        contentType: mistralResponse.headers.get('content-type'),
+        contentLength: mistralResponse.headers.get('content-length'),
+      });
+
+      if (!mistralResponse.ok) {
+        const errorText = await mistralResponse.text();
+        console.error('❌ Erreur Mistral AI:', errorText);
+        console.error('📋 Détails réponse:', {
+          status: mistralResponse.status,
+          statusText: mistralResponse.statusText,
+          headers: Object.fromEntries(mistralResponse.headers.entries())
+        });
+        
+        // S'assurer que les en-têtes CORS sont présents même en cas d'erreur
+        addCorsHeaders(req, res);
+        
+        return res.status(mistralResponse.status).json({
+          error: `Erreur Mistral AI: ${errorText}`,
+          status: mistralResponse.status
+        });
+      }
+
+      const result = await mistralResponse.json();
+      console.log('✅ Réponse Mistral complète:', JSON.stringify(result, null, 2));
+      console.log('📋 Clés disponibles dans résultat:', Object.keys(result));
+      console.log('✅ Transcription réussie, longueur texte:', result.text?.length || result.transcription?.length || 0);
+      
+      // Vérifier que le résultat contient bien le texte
+      // Mistral peut retourner différents formats : 'text', 'transcription', ou directement une string
+      let transcriptionText = '';
+      
+      if (typeof result === 'string') {
+        transcriptionText = result;
+      } else if (result.text) {
+        transcriptionText = result.text;
+      } else if (result.transcription) {
+        transcriptionText = result.transcription;
+      } else if (result.transcript) {
+        transcriptionText = result.transcript;
+      } else {
+        console.error('⚠️  Réponse Mistral inattendue:', JSON.stringify(result, null, 2));
+        throw new Error('La réponse de Mistral ne contient pas de transcription. Format: ' + JSON.stringify(result));
+      }
+      
+      if (!transcriptionText || transcriptionText.trim().length === 0) {
+        console.error('⚠️  Transcription vide reçue de Mistral');
+        throw new Error('La transcription retournée par Mistral est vide. Vérifiez votre enregistrement audio.');
+      }
+      
+      console.log('✅ Texte transcription extrait, longueur:', transcriptionText.length);
+    
+      // Enregistrer métrique business
+      metricsDashboard.recordBusinessEvent('audio_transcribed', {
+        userId,
+        metadata: {
+          audioSize: audioFile.size,
+          model: 'voxtral-mini-transcribe-2507',
+          language: 'fr'
+        }
+      });
+      
+      advancedLogger.business('transcription_completed', {
+        userId,
+        audioSize: audioFile.size,
+        transcriptionLength: transcriptionText.length
+      });
+    
+      // S'assurer que les en-têtes CORS sont présents avant la réponse
+      addCorsHeaders(req, res);
+      
+      res.json({
+        transcript: transcriptionText,
+        success: true
+      });
+      
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('⏱️  Timeout lors de l\'appel Mistral AI (60s dépassé)');
+        addCorsHeaders(req, res);
+        return res.status(504).json({
+          error: 'Timeout: La transcription prend trop de temps. Réessayez avec un fichier plus court.',
+          timeout: true
+        });
+      }
+      
+      throw fetchError;
     }
 
-    const result = await mistralResponse.json();
-    
-    // Enregistrer métrique business
-    metricsDashboard.recordBusinessEvent('audio_transcribed', {
-      userId,
-      metadata: {
-        audioSize: audioFile.size,
-        model: 'voxtral-mini-transcribe-2507',
-        language: 'fr'
-      }
-    });
-    
-    advancedLogger.business('transcription_completed', {
-      userId,
-      audioSize: audioFile.size,
-      transcriptionLength: result.text.length
-    });
-    
-    res.json({
-      transcript: result.text,
-      success: true
-    });
-
   } catch (error) {
-    console.error('Erreur lors de la transcription:', error);
-    res.status(500).json({ 
-      error: 'Erreur interne du serveur',
-      details: error.message
-    });
+    console.error('❌ Erreur lors de la transcription:', error);
+    console.error('📋 Stack trace:', error.stack);
+    
+    // S'assurer que les en-têtes CORS sont présents même en cas d'erreur
+    addCorsHeaders(req, res);
+    
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Erreur interne du serveur',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 });
 
@@ -766,36 +1025,67 @@ app.post('/api/save-api-key',
   try {
     const { userId, apiKey, usePersonalKey } = req.body;
     
+    // Ajouter les en-têtes CORS dès le début
+    addCorsHeaders(req, res);
+    
     if (!userId || !apiKey) {
       return res.status(400).json({ error: 'userId et apiKey requis' });
     }
 
     console.log('💾 Sauvegarde clé API côté serveur pour:', userId);
     
+    // Récupérer l'email de l'utilisateur
+    const { data: user, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user) {
+      console.error('❌ Erreur récupération email:', userError || 'Utilisateur non trouvé');
+      return res.status(500).json({ error: 'Erreur récupération email utilisateur' });
+    }
+
+    const userEmail = user.email;
+    
     // Chiffrer la clé
     const encryptedKey = encryptApiKey(apiKey);
-    console.log('🔐 Clé chiffrée, longueur:', encryptedKey.length);
     
-    // Utiliser le service role pour bypass RLS
+    // Utiliser UPSERT avec email
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .update({
+      .upsert({
+        id: userId,
+        email: userEmail,  // Ajout de l'email
         personal_mistral_api_key: encryptedKey,
         use_personal_api_key: usePersonalKey !== false,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id',
+        ignoreDuplicates: false
       })
-      .eq('id', userId);
-
+      .select('id, email, personal_mistral_api_key, use_personal_api_key')
+      .single();
+    
     if (error) {
-      console.error('❌ Erreur Supabase server:', error);
+      console.error('❌ Erreur Supabase upsert:', error);
       return res.status(500).json({ error: error.message });
     }
 
-    console.log('✅ Clé API sauvegardée côté serveur');
+    console.log('✅ Clé API sauvegardée via upsert:', {
+      userId: data.id,
+      hasKey: !!data.personal_mistral_api_key,
+      usePersonalKey: data.use_personal_api_key
+    });
+    
     res.json({ success: true, message: 'Clé API sauvegardée' });
     
   } catch (error) {
     console.error('❌ Erreur sauvegarde server:', error);
+    
+    // S'assurer que les en-têtes CORS sont présents même en cas d'erreur
+    addCorsHeaders(req, res);
+    
     res.status(500).json({ error: 'Erreur interne serveur' });
   }
 });
@@ -806,6 +1096,7 @@ app.get('/api/get-api-key/:userId', async (req, res) => {
     const { userId } = req.params;
     
     if (!userId) {
+      addCorsHeaders(req, res);
       return res.status(400).json({ error: 'userId requis' });
     }
 
@@ -813,17 +1104,62 @@ app.get('/api/get-api-key/:userId', async (req, res) => {
     
     const decryptedKey = await getApiKey(userId);
     
+    // S'assurer que les en-têtes CORS sont présents avant la réponse
+    addCorsHeaders(req, res);
+    
     if (decryptedKey) {
       console.log('✅ Clé API récupérée et déchiffrée côté serveur');
       res.json({ success: true, apiKey: decryptedKey });
     } else {
       console.log('ℹ️  Aucune clé API trouvée pour cet utilisateur');
+      
+      // Log supplémentaire pour débogage
+      console.log('🔍 Debug: Vérifier que la clé est bien stockée dans Supabase pour', userId);
+      
       res.json({ success: false, apiKey: null });
     }
     
   } catch (error) {
     console.error('❌ Erreur récupération server:', error);
-    res.status(500).json({ error: 'Erreur interne serveur' });
+    
+    // Log supplémentaire avec la stack trace
+    console.error('🔍 Debug: Stack trace:', error.stack);
+    
+    // S'assurer que les en-têtes CORS sont présents même en cas d'erreur
+    addCorsHeaders(req, res);
+    
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erreur interne serveur' });
+    }
+  }
+});
+
+// Route de test Supabase
+app.get('/api/test-supabase', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .limit(1);
+
+    if (error) {
+      console.error('❌ Erreur Supabase:', error);
+      return res.status(500).json({ 
+        error: 'Erreur de connexion à Supabase',
+        details: error.message 
+      });
+    }
+
+    res.json({
+      connected: true,
+      data: data
+    });
+  } catch (error) {
+    console.error('❌ Erreur test Supabase:', error);
+    res.status(500).json({ 
+      error: 'Erreur interne',
+      details: error.message 
+    });
   }
 });
 
@@ -852,6 +1188,9 @@ if (process.env.SENTRY_DSN) {
 app.use((error, req, res, next) => {
   console.error('❌ Erreur serveur:', error);
   
+  // S'assurer que les en-têtes CORS sont toujours présents, même en cas d'erreur
+  addCorsHeaders(req, res);
+  
   // Log sécurisé (pas de données sensibles)
   const sanitizedError = {
     message: error.message,
@@ -876,6 +1215,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Serveur API MediScribe démarré sur le port ${PORT}`);
   console.log(`🤖 Provider IA: Mistral AI`);
   console.log(`🔒 Sécurité: Niveau 100% - Production Ready`);
+  console.log(`🔑 Service role key: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'présente' : 'manquante'}`);
   console.log(`📡 Endpoints disponibles:`);
   console.log(`   POST /api/transcribe - Transcription audio`);
   console.log(`   POST /api/generate-report - Génération de compte rendu`);

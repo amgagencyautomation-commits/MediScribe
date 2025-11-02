@@ -142,7 +142,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (DEMO_MODE) {
       // Mode démo - simuler un utilisateur connecté
       setUser(DEMO_USER as User);
-      setSession({ user: DEMO_USER as User, access_token: 'demo-token' } as Session);
+      // Token de démo : utiliser constante plutôt que string hardcodée
+      const DEMO_TOKEN = `demo-token-${Date.now()}`;
+      setSession({ user: DEMO_USER as User, access_token: DEMO_TOKEN } as Session);
       setProfile(DEMO_PROFILE);
       setLoading(false);
       return;
@@ -167,7 +169,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(session);
           setUser(session.user);
           
-          // Charger le profil de manière non bloquante
+          // Débloquer l'interface immédiatement (ne pas attendre le profil)
+          setLoading(false);
+          
+          // Charger le profil en arrière-plan (non bloquant)
           fetchProfile(session.user.id).catch((profileError) => {
             console.error('⚠️  Erreur chargement profil (non bloquant):', profileError);
           });
@@ -177,25 +182,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(null);
           setProfile(null);
           setOrganization(null);
+          setLoading(false);
         }
       } catch (error) {
         console.error('❌ Erreur initialisation auth:', error);
         // En cas d'erreur, on considère qu'il n'y a pas de session
         setSession(null);
         setUser(null);
-      } finally {
-        console.log('✅ Initialisation terminée, setLoading(false)');
         setLoading(false);
       }
     };
 
     initializeAuth();
 
-    // Timeout de sécurité absolu pour débloquer l'interface (3s max)
+    // Timeout de sécurité absolu pour débloquer l'interface (2s max, réduit pour meilleure UX)
     const emergencyTimeout = setTimeout(() => {
-      console.warn('⚠️  Timeout de sécurité atteint, débloquage forcé');
-      setLoading(false);
-    }, 3000);
+      if (loading) {
+        console.warn('⚠️  Timeout de sécurité atteint, débloquage forcé (profil peut se charger en arrière-plan)');
+        setLoading(false);
+      }
+    }, 2000);
 
     // Écouter les changements d'authentification
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
