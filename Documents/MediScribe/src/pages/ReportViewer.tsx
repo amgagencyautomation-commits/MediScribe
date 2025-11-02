@@ -96,6 +96,18 @@ export default function ReportViewer() {
   const handleDownloadReport = () => {
     if (!reportData) return;
 
+    // Sanitizer pour éviter DOM XSS - supprimer caractères dangereux du nom
+    const sanitizeFileName = (name: string): string => {
+      // Supprimer caractères spéciaux et conserver uniquement alphanumériques, espaces, tirets
+      return name.replace(/[^a-zA-Z0-9\s\-àáâãäåèéêëìíîïòóôõöùúûüýÿ]/g, '')
+        .replace(/\s+/g, '-')
+        .toLowerCase()
+        .substring(0, 50); // Limiter la longueur
+    };
+
+    const sanitizedPatientName = sanitizeFileName(reportData.patientName);
+    const sanitizedConsultationType = sanitizeFileName(reportData.consultationType);
+
     const content = `
 COMPTE RENDU MÉDICAL
 ====================
@@ -112,7 +124,8 @@ ${reportData.report}
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `compte-rendu-${reportData.patientName.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.txt`;
+    // Utiliser le nom sanitizé pour éviter DOM XSS
+    link.download = `compte-rendu-${sanitizedPatientName}-${new Date().toISOString().split('T')[0]}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

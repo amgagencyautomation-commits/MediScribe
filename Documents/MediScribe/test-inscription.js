@@ -24,10 +24,12 @@ async function testInscription() {
   console.log('1️⃣  Test de création de compte...\n');
   
   const testEmail = `test${Date.now()}@mediscribe.test`;
-  const testPassword = 'Test123456!';
+  // Utiliser variable d'environnement pour le mot de passe de test (plus sécurisé)
+  // En production, générer un mot de passe aléatoire plutôt que hardcoder
+  const testPassword = process.env.TEST_PASSWORD || `Test${Date.now()}!`;
   
   console.log('📧 Email de test:', testEmail);
-  console.log('🔐 Mot de passe:', testPassword);
+  console.log('🔐 Mot de passe:', testPassword ? '***' : 'NON DÉFINI');
   console.log('');
   
   try {

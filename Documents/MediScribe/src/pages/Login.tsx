@@ -11,7 +11,30 @@ import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as any)?.from?.pathname || '/dashboard';
+  
+  // Validation des routes pour éviter Open Redirect
+  const validateRedirectPath = (path: string | undefined): string => {
+    if (!path) return '/dashboard';
+    
+    // Liste des routes autorisées (routes internes uniquement)
+    const allowedRoutes = [
+      '/dashboard',
+      '/dashboard/consultations',
+      '/dashboard/record',
+      '/dashboard/settings',
+      '/dashboard/reports'
+    ];
+    
+    // Vérifier que le chemin commence par / et est dans la liste autorisée
+    if (path.startsWith('/') && allowedRoutes.includes(path)) {
+      return path;
+    }
+    
+    // Si le chemin est externe ou non autorisé, rediriger vers dashboard
+    return '/dashboard';
+  };
+  
+  const from = validateRedirectPath((location.state as any)?.from?.pathname);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

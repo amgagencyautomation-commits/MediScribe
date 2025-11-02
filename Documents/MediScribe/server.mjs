@@ -274,6 +274,11 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Appliquer sanitization sur tous les inputs
 app.use(sanitizeInputs);
 
+// Activer la protection CSRF sur toutes les routes POST/PUT/DELETE
+// Positionné après sessions mais avant les routes API
+// Note: Les routes GET et /api/health sont exclues par défaut dans csrfProtection
+app.use(csrfProtection);
+
 // Middleware de logging global pour toutes les requêtes (debug)
 app.use((req, res, next) => {
   if (req.path.includes('transcribe')) {
