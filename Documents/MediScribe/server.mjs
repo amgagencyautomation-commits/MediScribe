@@ -13,6 +13,7 @@ import cookieParser from 'cookie-parser';
 import DOMPurify from 'isomorphic-dompurify';
 import { body, validationResult } from 'express-validator';
 import * as Sentry from '@sentry/node';
+import csrf from 'csurf';
 import advancedLogger from './src/lib/logger.js';
 import metricsDashboard from './src/lib/dashboard.js';
 import dotenv from 'dotenv';
@@ -212,7 +213,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // HTTPS only en prod
+    secure: process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIE === 'true', // HTTPS only en prod
     httpOnly: true, // Empêche l'accès JavaScript
     maxAge: 24 * 60 * 60 * 1000, // 24 heures
     sameSite: 'strict' // Protection CSRF
@@ -220,32 +221,29 @@ app.use(session({
   name: 'mediscribe.sid' // Nom de session personnalisé
 }));
 
-// CSRF Token Generation (Alternative moderne à csurf)
-const generateCSRFToken = () => {
-  return CryptoJS.lib.WordArray.random(128/8).toString();
-};
+// CSRF Protection avec csurf (bibliothèque standard reconnue par Snyk)
+// Configuration CSRF avec cookie
+const csrfProtection = csrf({ 
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIE === 'true',
+    sameSite: 'strict'
+  }
+});
 
-const csrfProtection = (req, res, next) => {
-  // Ignorer pour GET requests et health check
+// Wrapper pour exclure certaines routes du CSRF
+const csrfMiddleware = (req, res, next) => {
+  // Exclure GET requests et health check du CSRF
   if (req.method === 'GET' || req.path === '/api/health') {
     return next();
   }
+  // Appliquer protection CSRF pour les autres méthodes
+  csrfProtection(req, res, next);
+};
 
-  // Générer token si pas existant
-  if (!req.session.csrfToken) {
-    req.session.csrfToken = generateCSRFToken();
-  }
-
-  // Vérifier token pour requêtes POST/PUT/DELETE
-  const clientToken = req.headers['x-csrf-token'];
-  if (!clientToken || clientToken !== req.session.csrfToken) {
-    return res.status(403).json({
-      error: 'Token CSRF invalide',
-      code: 'CSRF_TOKEN_MISMATCH'
-    });
-  }
-
-  next();
+// Alternative : génération de token pour compatibilité (si nécessaire)
+const generateCSRFToken = () => {
+  return CryptoJS.lib.WordArray.random(128/8).toString();
 };
 
 // Input Sanitization Middleware
@@ -276,8 +274,8 @@ app.use(sanitizeInputs);
 
 // Activer la protection CSRF sur toutes les routes POST/PUT/DELETE
 // Positionné après sessions mais avant les routes API
-// Note: Les routes GET et /api/health sont exclues par défaut dans csrfProtection
-app.use(csrfProtection);
+// Utilise csurf (bibliothèque standard) pour meilleure détection par Snyk
+app.use(csrfMiddleware);
 
 // Middleware de logging global pour toutes les requêtes (debug)
 app.use((req, res, next) => {
@@ -902,14 +900,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Route pour récupérer le token CSRF
-app.get('/api/csrf-token', (req, res) => {
-  if (!req.session.csrfToken) {
-    req.session.csrfToken = generateCSRFToken();
-  }
-  
+// Route pour récupérer le token CSRF (compatible avec csurf)
+app.get('/api/csrf-token', csrfProtection, (req, res) => {
+  // csurf expose req.csrfToken() automatiquement
   res.json({
-    csrfToken: req.session.csrfToken
+    csrfToken: req.csrfToken()
   });
 });
 

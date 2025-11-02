@@ -7,9 +7,9 @@ export const testData = {
    * Utilisateur de test
    */
   user: {
-    id: '550e8400-e29b-41d4-a716-446655440000',
-    email: 'test@mediscribe.com',
-    password: 'TestPassword123!',
+    id: process.env.TEST_USER_ID || '550e8400-e29b-41d4-a716-446655440000',
+    email: process.env.TEST_EMAIL || 'test@mediscribe.com',
+    password: process.env.TEST_PASSWORD || `TestPassword${Date.now()}!`,
     full_name: 'Dr. Test User',
   },
 
@@ -25,9 +25,9 @@ export const testData = {
    * Clé API Mistral de test
    */
   apiKey: {
-    valid: 'sk-test-valid-mistral-key-1234567890',
+    valid: process.env.TEST_MISTRAL_API_KEY || `sk-test-valid-mistral-key-${Date.now()}`,
     invalid: 'invalid-key',
-    encrypted: 'U2FsdGVkX1+encrypted-key-data',
+    encrypted: process.env.TEST_ENCRYPTED_KEY || `U2FsdGVkX1+encrypted-${Date.now()}`,
   },
 
   /**

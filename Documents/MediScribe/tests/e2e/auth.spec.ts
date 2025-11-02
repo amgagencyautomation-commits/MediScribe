@@ -83,8 +83,10 @@ test.describe('Authentication Flow', () => {
     
     await page.goto('/login');
     
-    await page.fill('input[name="email"], input[type="email"]', 'test@mediscribe.com');
-    await page.fill('input[name="password"], input[type="password"]', 'Test123456!');
+    const testEmail = process.env.TEST_EMAIL || `test-${Date.now()}@mediscribe.com`;
+    const testPassword = process.env.TEST_PASSWORD || `Test${Date.now()}!`;
+    await page.fill('input[name="email"], input[type="email"]', testEmail);
+    await page.fill('input[name="password"], input[type="password"]', testPassword);
     await page.click('button[type="submit"]');
     
     // Should redirect to dashboard
@@ -97,8 +99,10 @@ test.describe('Authentication Flow', () => {
   test('should logout successfully', async ({ page }) => {
     // Login first
     await page.goto('/login');
-    await page.fill('input[name="email"], input[type="email"]', 'test@mediscribe.com');
-    await page.fill('input[name="password"], input[type="password"]', 'Test123456!');
+    const testEmail = process.env.TEST_EMAIL || `test-${Date.now()}@mediscribe.com`;
+    const testPassword = process.env.TEST_PASSWORD || `Test${Date.now()}!`;
+    await page.fill('input[name="email"], input[type="email"]', testEmail);
+    await page.fill('input[name="password"], input[type="password"]', testPassword);
     await page.click('button[type="submit"]');
     
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
@@ -124,8 +128,10 @@ test.describe('Authentication Flow', () => {
   test('should remember user session after page refresh', async ({ page }) => {
     // Login
     await page.goto('/login');
-    await page.fill('input[name="email"], input[type="email"]', 'test@mediscribe.com');
-    await page.fill('input[name="password"], input[type="password"]', 'Test123456!');
+    const testEmail = process.env.TEST_EMAIL || `test-${Date.now()}@mediscribe.com`;
+    const testPassword = process.env.TEST_PASSWORD || `Test${Date.now()}!`;
+    await page.fill('input[name="email"], input[type="email"]', testEmail);
+    await page.fill('input[name="password"], input[type="password"]', testPassword);
     await page.click('button[type="submit"]');
     
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });

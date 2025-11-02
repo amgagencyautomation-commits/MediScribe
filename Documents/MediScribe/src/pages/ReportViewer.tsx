@@ -96,17 +96,27 @@ export default function ReportViewer() {
   const handleDownloadReport = () => {
     if (!reportData) return;
 
-    // Sanitizer pour éviter DOM XSS - supprimer caractères dangereux du nom
+    // Sanitizer strict pour éviter DOM XSS - ne garder que caractères sûrs
     const sanitizeFileName = (name: string): string => {
-      // Supprimer caractères spéciaux et conserver uniquement alphanumériques, espaces, tirets
-      return name.replace(/[^a-zA-Z0-9\s\-àáâãäåèéêëìíîïòóôõöùúûüýÿ]/g, '')
-        .replace(/\s+/g, '-')
+      if (!name || typeof name !== 'string') return 'patient';
+      
+      // Convertir en string sécurisée : uniquement lettres, chiffres, tirets
+      // Encoder d'abord les caractères spéciaux puis extraire uniquement le safe subset
+      return name
+        .replace(/[^\w\s-]/g, '') // Supprimer tout sauf lettres, chiffres, espaces, tirets
+        .replace(/\s+/g, '-') // Espaces en tirets
+        .replace(/-+/g, '-') // Plusieurs tirets en un seul
+        .replace(/^-|-$/g, '') // Supprimer tirets début/fin
         .toLowerCase()
-        .substring(0, 50); // Limiter la longueur
+        .substring(0, 30) // Limiter strictement la longueur
+        || 'patient'; // Fallback si vide
     };
 
     const sanitizedPatientName = sanitizeFileName(reportData.patientName);
-    const sanitizedConsultationType = sanitizeFileName(reportData.consultationType);
+    const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, ''); // Format: YYYYMMDD
+    
+    // Construire le nom de fichier de manière sûre (sans interpolation de user input non validé)
+    const safeFileName = `compte-rendu-${sanitizedPatientName}-${dateStr}.txt`;
 
     const content = `
 COMPTE RENDU MÉDICAL
@@ -124,8 +134,8 @@ ${reportData.report}
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    // Utiliser le nom sanitizé pour éviter DOM XSS
-    link.download = `compte-rendu-${sanitizedPatientName}-${new Date().toISOString().split('T')[0]}.txt`;
+    // Utiliser le nom de fichier pré-sanitizé pour éviter DOM XSS
+    link.setAttribute('download', safeFileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

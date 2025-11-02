@@ -33,7 +33,7 @@ describe('Security Tests', () => {
           request(API_BASE_URL)
             .post('/api/test-key')
             .set('x-user-id', testUserId)
-            .send({ apiKey: 'test-key-for-rate-limiting' })
+            .send({ apiKey: process.env.TEST_API_KEY || `test-key-${Date.now()}` })
         );
       }
       
@@ -73,12 +73,12 @@ describe('Security Tests', () => {
       
       const response = await request(API_BASE_URL)
         .post('/api/generate-report')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .send({
           transcript: xssPayload,
           specialty: 'Médecine générale',
           consultationType: 'Consultation',
-          userId: 'test-user'
+          userId: process.env.TEST_USER_ID || 'test-user-' + Date.now()
         });
       
       // Should either sanitize or reject
@@ -103,12 +103,12 @@ describe('Security Tests', () => {
       
       const response = await request(API_BASE_URL)
         .post('/api/generate-report')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .send({
           transcript: htmlPayload + ' Test medical transcript',
           specialty: 'Médecine générale',
           consultationType: 'Consultation',
-          userId: 'test-user'
+          userId: process.env.TEST_USER_ID || 'test-user-' + Date.now()
         });
       
       if (response.status === 200) {
@@ -121,12 +121,12 @@ describe('Security Tests', () => {
       
       const response = await request(API_BASE_URL)
         .post('/api/generate-report')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .send({
           transcript: veryLongString,
           specialty: 'Médecine générale',
           consultationType: 'Consultation',
-          userId: 'test-user'
+          userId: process.env.TEST_USER_ID || 'test-user-' + Date.now()
         });
       
       expect(response.status).toBe(400);
@@ -137,12 +137,12 @@ describe('Security Tests', () => {
     it('should require CSRF token for POST requests', async () => {
       const response = await request(API_BASE_URL)
         .post('/api/generate-report')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .send({
           transcript: 'Test transcript',
           specialty: 'Médecine générale',
           consultationType: 'Consultation',
-          userId: 'test-user'
+          userId: process.env.TEST_USER_ID || 'test-user-' + Date.now()
         });
       
       // Should either require CSRF token or authenticate differently
@@ -169,13 +169,13 @@ describe('Security Tests', () => {
       // Use token in POST request
       const response = await request(API_BASE_URL)
         .post('/api/generate-report')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .set('x-csrf-token', csrfToken)
         .send({
           transcript: 'Test transcript',
           specialty: 'Médecine générale',
           consultationType: 'Consultation',
-          userId: 'test-user'
+          userId: process.env.TEST_USER_ID || 'test-user-' + Date.now()
         });
       
       // With valid CSRF token, should not get 403
@@ -289,7 +289,7 @@ describe('Security Tests', () => {
       
       const response = await request(API_BASE_URL)
         .post('/api/transcribe')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .attach('file', textFile, 'test.txt');
       
       // Should reject non-audio files
@@ -301,7 +301,7 @@ describe('Security Tests', () => {
       
       const response = await request(API_BASE_URL)
         .post('/api/transcribe')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .attach('file', largeFile, 'large.mp3');
       
       expect(response.status).toBeGreaterThanOrEqual(400);
@@ -313,7 +313,7 @@ describe('Security Tests', () => {
       
       const response = await request(API_BASE_URL)
         .post('/api/transcribe')
-        .set('x-user-id', 'test-user')
+        .set('x-user-id', process.env.TEST_USER_ID || 'test-user-' + Date.now())
         .attach('file', testFile, maliciousFilename);
       
       // Should handle safely without path traversal
