@@ -212,6 +212,7 @@ export default function SignupCabinet() {
         email: formData.adminEmail,
         password: formData.adminPassword,
         options: {
+          emailRedirectTo: `${window.location.origin}/login`,
           data: {
             full_name: formData.adminFullName,
             specialty: formData.adminSpecialty,
@@ -302,10 +303,45 @@ export default function SignupCabinet() {
 
         // Mettre à jour l'organisation avec la clé API partagée si fournie
         if (formData.apiConfigType === 'shared' && formData.sharedApiKey) {
+          // Sauvegarder dans api_keys (nouveau système) en priorité
+          try {
+            const { apiKeyService } = await import('@/lib/apiKeyService');
+            const saveResult = await apiKeyService.saveOrganizationApiKey(
+              orgData,
+              formData.sharedApiKey,
+              'mistral'
+            );
+            if (saveResult.success) {
+              console.log('✅ Clé API organisation sauvegardée dans api_keys');
+            } else {
+              console.warn('⚠️  Erreur sauvegarde api_keys org:', saveResult.error);
+            }
+          } catch (apiKeyServiceError) {
+            console.warn('⚠️  apiKeyService non disponible, sauvegarde uniquement dans organizations');
+          }
+          
+          // Sauvegarder aussi dans organizations (ancien système - compatibilité)
           await (supabase
             .from('organizations') as any)
             .update({ shared_mistral_api_key: encryptApiKey(formData.sharedApiKey) })
             .eq('id', orgData);
+        }
+        
+        // Sauvegarder la clé personnelle dans api_keys si fournie
+        if (formData.apiConfigType === 'personal' && formData.personalApiKey) {
+          try {
+            const { apiKeyService } = await import('@/lib/apiKeyService');
+            const saveResult = await apiKeyService.saveUserApiKey(
+              authData.user.id,
+              formData.personalApiKey,
+              'mistral'
+            );
+            if (saveResult.success) {
+              console.log('✅ Clé API personnelle sauvegardée dans api_keys');
+            }
+          } catch (apiKeyServiceError) {
+            console.warn('⚠️  apiKeyService non disponible pour clé personnelle');
+          }
         }
 
         // Créer les invitations en attente
