@@ -19,10 +19,9 @@ import advancedLogger from './src/lib/logger.js';
 import metricsDashboard from './src/lib/dashboard.js';
 import dotenv from 'dotenv';
 
-// Charger les variables d'environnement
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: '.env.server' });
-}
+// Charger les variables d'environnement depuis .env.server en priorité
+// Le fichier .env.server contient les variables spécifiques au serveur
+dotenv.config({ path: '.env.server' });
 
 // Initialisation Sentry
 if (process.env.SENTRY_DSN) {
@@ -421,11 +420,44 @@ const upload = multer({
 });
 
 // Fonction pour récupérer la clé API depuis Supabase
+// Priorité : 1) api_keys (nouveau système), 2) profiles.personal_mistral_api_key (compatibilité), 3) organisations
 async function getApiKey(userId) {
   try {
     console.log('🔍 getApiKey - userId:', userId);
     
-    // Query Supabase with proper syntax (single() returns one row instead of array)
+    // ÉTAPE 1 : Chercher dans la table api_keys (nouveau système) en priorité
+    try {
+      const { data: apiKeyData, error: apiKeyError } = await supabaseAdmin
+        .from('api_keys')
+        .select('encrypted_key, is_valid')
+        .eq('user_id', userId)
+        .eq('key_type', 'mistral')
+        .eq('is_valid', true)
+        .single();
+
+      if (!apiKeyError && apiKeyData && apiKeyData.encrypted_key) {
+        console.log('✅ Clé trouvée dans api_keys (nouveau système)');
+        try {
+          const decrypted = decryptApiKey(apiKeyData.encrypted_key);
+          if (decrypted && decrypted.length > 0) {
+            console.log('✅ Clé déchiffrée depuis api_keys, longueur:', decrypted.length);
+            // Mettre à jour last_used_at
+            await supabaseAdmin
+              .from('api_keys')
+              .update({ last_used_at: new Date().toISOString() })
+              .eq('user_id', userId)
+              .eq('key_type', 'mistral');
+            return decrypted;
+          }
+        } catch (decryptError) {
+          console.warn('⚠️  Erreur déchiffrement api_keys, fallback...', decryptError);
+        }
+      }
+    } catch (apiKeysTableError) {
+      console.log('ℹ️  Table api_keys non disponible ou erreur, fallback vers profiles...');
+    }
+
+    // ÉTAPE 2 : Fallback vers profiles.personal_mistral_api_key (ancien système - compatibilité)
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('personal_mistral_api_key, organization_id, use_personal_api_key')
@@ -448,16 +480,17 @@ async function getApiKey(userId) {
       hasOrgId: !!profile.organization_id
     });
 
-    // Si l'utilisateur utilise sa clé personnelle
+    // Si l'utilisateur utilise sa clé personnelle (ancien système)
     if (profile.use_personal_api_key && profile.personal_mistral_api_key) {
-      console.log('🔐 Déchiffrement clé personnelle...');
+      console.log('🔐 Déchiffrement clé personnelle (ancien système profiles)...');
       try {
         const decrypted = decryptApiKey(profile.personal_mistral_api_key);
         if (!decrypted || decrypted.length === 0) {
           console.error('❌ Échec déchiffrement: clé vide');
           return null;
         }
-        console.log('✅ Clé personnelle déchiffrée, longueur:', decrypted.length);
+        console.log('✅ Clé personnelle déchiffrée (compatibilité), longueur:', decrypted.length);
+        // Optionnel : migrer vers api_keys (peut être fait en arrière-plan)
         return decrypted;
       } catch (decryptError) {
         console.error('❌ Erreur déchiffrement:', decryptError);
@@ -465,9 +498,37 @@ async function getApiKey(userId) {
       }
     }
 
-    // Si l'utilisateur fait partie d'une organisation avec clé partagée
+    // ÉTAPE 3 : Si l'utilisateur fait partie d'une organisation avec clé partagée
     if (profile.organization_id && !profile.use_personal_api_key) {
       console.log('🔍 Recherche clé organisationnelle pour org:', profile.organization_id);
+      
+      // D'abord chercher dans api_keys (nouveau système pour org)
+      try {
+        const { data: orgApiKey, error: orgApiKeyError } = await supabaseAdmin
+          .from('api_keys')
+          .select('encrypted_key, is_valid')
+          .eq('organization_id', profile.organization_id)
+          .eq('key_type', 'mistral')
+          .eq('is_valid', true)
+          .single();
+
+        if (!orgApiKeyError && orgApiKey && orgApiKey.encrypted_key) {
+          console.log('✅ Clé organisation trouvée dans api_keys');
+          try {
+            const decrypted = decryptApiKey(orgApiKey.encrypted_key);
+            if (decrypted && decrypted.length > 0) {
+              console.log('✅ Clé organisation déchiffrée depuis api_keys');
+              return decrypted;
+            }
+          } catch (decryptError) {
+            console.warn('⚠️  Erreur déchiffrement org api_keys, fallback...');
+          }
+        }
+      } catch (orgApiKeysError) {
+        console.log('ℹ️  api_keys org non disponible, fallback vers organizations...');
+      }
+
+      // Fallback vers organizations.shared_mistral_api_key (ancien système)
       const { data: org, error: orgError } = await supabaseAdmin
         .from('organizations')
         .select('shared_mistral_api_key')
@@ -480,14 +541,14 @@ async function getApiKey(userId) {
       }
 
       if (org?.shared_mistral_api_key) {
-        console.log('🔐 Déchiffrement clé organisationnelle...');
+        console.log('🔐 Déchiffrement clé organisationnelle (ancien système)...');
         try {
           const decrypted = decryptApiKey(org.shared_mistral_api_key);
           if (!decrypted || decrypted.length === 0) {
             console.error('❌ Échec déchiffrement org: clé vide');
             return null;
           }
-          console.log('✅ Clé organisationnelle déchiffrée');
+          console.log('✅ Clé organisationnelle déchiffrée (compatibilité)');
           return decrypted;
         } catch (decryptError) {
           console.error('❌ Erreur déchiffrement org:', decryptError);
@@ -1092,7 +1153,33 @@ app.post('/api/save-api-key',
     // Chiffrer la clé
     const encryptedKey = encryptApiKey(apiKey);
     
-    // Utiliser UPSERT avec email
+    // ÉTAPE 1 : Sauvegarder dans api_keys (nouveau système) en priorité
+    try {
+      const { error: apiKeysError } = await supabaseAdmin
+        .from('api_keys')
+        .upsert({
+          user_id: userId,
+          encrypted_key: encryptedKey,
+          key_type: 'mistral',
+          is_valid: true,
+          last_validated_at: new Date().toISOString(),
+          validation_error: null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,key_type'
+        });
+
+      if (apiKeysError) {
+        console.warn('⚠️  Erreur sauvegarde api_keys (nouveau système):', apiKeysError);
+        console.log('ℹ️  Continue avec sauvegarde profiles (compatibilité)...');
+      } else {
+        console.log('✅ Clé API sauvegardée dans api_keys (nouveau système)');
+      }
+    } catch (apiKeysTableError) {
+      console.warn('⚠️  Table api_keys non disponible, sauvegarde uniquement dans profiles:', apiKeysTableError);
+    }
+    
+    // ÉTAPE 2 : Sauvegarder aussi dans profiles (ancien système - compatibilité)
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -1109,11 +1196,11 @@ app.post('/api/save-api-key',
       .single();
     
     if (error) {
-      console.error('❌ Erreur Supabase upsert:', error);
+      console.error('❌ Erreur Supabase upsert profiles:', error);
       return res.status(500).json({ error: error.message });
     }
 
-    console.log('✅ Clé API sauvegardée via upsert:', {
+    console.log('✅ Clé API sauvegardée dans profiles (compatibilité):', {
       userId: data.id,
       hasKey: !!data.personal_mistral_api_key,
       usePersonalKey: data.use_personal_api_key
